@@ -1,0 +1,59 @@
+package com.faceswap;
+
+import java.awt.Canvas;
+import java.awt.event.KeyEvent;
+import org.junit.Test;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+public class FaceSwapHotkeyTest
+{
+	@Test
+	public void escapeCancelsTargetPicking()
+	{
+		FaceSwapPlugin plugin = new FaceSwapPlugin();
+		plugin.setPickPlayerMode(true);
+
+		KeyEvent event = keyEvent(KeyEvent.VK_ESCAPE);
+
+		assertTrue(plugin.handleKeyPressed(event));
+		assertFalse(plugin.handleKeyPressed(event));
+	}
+
+	@Test
+	public void inactiveEscapeAndOtherKeysPassThrough()
+	{
+		FaceSwapPlugin plugin = new FaceSwapPlugin();
+
+		assertFalse(plugin.handleKeyPressed(keyEvent(KeyEvent.VK_ESCAPE)));
+		assertFalse(plugin.handleKeyPressed(keyEvent(KeyEvent.VK_ENTER)));
+	}
+
+	@Test
+	public void agentIsTheFirstFictionalCharacter()
+	{
+		FaceSwapHead firstFictionalCharacter = null;
+		for (FaceSwapHead head : FaceSwapHead.values())
+		{
+			if (head.getCategory() == FaceSwapHeadCategory.FICTIONAL_CHARACTER)
+			{
+				firstFictionalCharacter = head;
+				break;
+			}
+		}
+		assertTrue(firstFictionalCharacter == FaceSwapHead.AGENT);
+	}
+
+	private static KeyEvent keyEvent(int keyCode)
+	{
+		return new KeyEvent(
+			new Canvas(),
+			KeyEvent.KEY_PRESSED,
+			System.currentTimeMillis(),
+			0,
+			keyCode,
+			KeyEvent.CHAR_UNDEFINED);
+	}
+
+}

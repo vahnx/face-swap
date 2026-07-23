@@ -1,0 +1,182 @@
+plugins {
+	id 'java'
+}
+
+repositories {
+	mavenLocal()
+	maven {
+		url = 'https://repo.runelite.net'
+		content {
+			includeGroupByRegex("net\\.runelite.*")
+		}
+	}
+	mavenCentral()
+}
+
+def runeLiteVersion = 'latest.release'
+def pluginMainClass = 'com.faceswap.FaceSwapPluginTest'
+
+sourceSets {
+	test {
+		// Local-only assets used by the developer launcher. Plugin Hub standard
+		// builds package src/main/resources and therefore exclude this directory.
+		resources.srcDir 'dev-assets'
+	}
+	modelTools {
+		java.srcDir 'tools/java'
+	}
+}
+
+dependencies {
+	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
+
+	compileOnly 'org.projectlombok:lombok:1.18.30'
+	annotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+	testImplementation 'junit:junit:4.12'
+	testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
+	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
+
+	modelToolsImplementation group: 'net.runelite', name: 'cache', version: runeLiteVersion
+}
+
+group = 'com.faceswap'
+version = '1.0.0'
+
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+	options.release.set(11)
+}
+
+tasks.register('run', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = pluginMainClass
+
+	jvmArgs "-ea"
+	args "--developer-mode", "--debug"
+}
+
+tasks.register('exportElfHead', JavaExec) {
+	group = 'face swap tools'
+	description = 'Exports the Ensouled elf head cache model for Blender.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.ExportElfHead'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+		args layout.projectDirectory.dir('tools/blender').asFile.absolutePath
+	}
+}
+
+tasks.register('auditHeadModels', JavaExec) {
+	group = 'face swap tools'
+	description = 'Audits cache head models for player-compatible animation groups.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.AuditHeadModels'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+	}
+}
+
+tasks.register('auditDenseDonorModels', JavaExec) {
+	group = 'face swap tools'
+	description = 'Finds dense, fully rigged, head-sized cache models suitable as topology donors.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.AuditDenseDonorModels'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+	}
+}
+
+tasks.register('auditHelmetCoverage', JavaExec) {
+	group = 'face swap tools'
+	description = 'Prints cache wear-position coverage metadata for selected helmet item IDs.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.AuditHelmetCoverage'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+		args providers.gradleProperty('itemIds').getOrElse('')
+			.split(',')
+			.findAll { !it.isBlank() }
+	}
+}
+
+tasks.register('exportFullFaceHeadItems', JavaExec) {
+	group = 'face swap tools'
+	description = 'Exports head items that suppress both hair and jaw appearance slots.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.ExportFullFaceHeadItems'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+		args layout.projectDirectory.file('src/main/resources/full_face_head_items.csv').asFile.absolutePath
+	}
+}
+
+tasks.register('exportDenseDonorModel', JavaExec) {
+	group = 'face swap tools'
+	description = 'Exports the selected dense cache topology donor for Blender inspection.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.ExportDenseDonorModel'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+		args layout.projectDirectory.dir('tools/blender').asFile.absolutePath
+		args providers.gradleProperty('donorModel').getOrElse('50805')
+		args providers.gradleProperty('donorStem').getOrElse('dense_donor_head')
+	}
+}
+
+tasks.register('exportRiggedHead', JavaExec) {
+	group = 'face swap tools'
+	description = 'Exports an animation-group-compatible player head for Blender.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.ExportRiggedHead'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+		args layout.projectDirectory.dir('tools/blender').asFile.absolutePath
+	}
+}
+
+tasks.register('exportDenseRiggedHead', JavaExec) {
+	group = 'face swap tools'
+	description = 'Exports the densest player-compatible head and jaw candidates for Blender inspection.'
+	classpath = sourceSets.modelTools.runtimeClasspath
+	mainClass = 'com.faceswap.tools.ExportRiggedHead'
+	doFirst {
+		args providers.gradleProperty('osrsCache').getOrElse(
+			new File(System.getProperty('user.home'), '.runelite/jagexcache/oldschool/LIVE').absolutePath)
+		args layout.projectDirectory.dir('tools/blender').asFile.absolutePath
+		args '205', '47666', '10', '249', 'dense_rigged_player_head'
+	}
+}
+
+tasks.register('shadowJar', Jar) {
+	dependsOn configurations.testRuntimeClasspath
+	manifest {
+		attributes('Main-Class': pluginMainClass, 'Multi-Release': true)
+	}
+
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	from sourceSets.main.output
+	from sourceSets.test.output
+	from {
+		configurations.testRuntimeClasspath.collect { file ->
+			file.isDirectory() ? file : zipTree(file)
+		}
+	}
+
+	exclude 'META-INF/INDEX.LIST'
+	exclude 'META-INF/*.SF'
+	exclude 'META-INF/*.DSA'
+	exclude 'META-INF/*.RSA'
+	exclude '**/module-info.class'
+
+	group = BasePlugin.BUILD_GROUP
+	archiveClassifier.set('shadow')
+	archiveFileName.set("${rootProject.name}-${project.version}-all.jar")
+}

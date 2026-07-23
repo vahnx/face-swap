@@ -1,0 +1,118 @@
+package com.faceswap;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import net.runelite.client.config.ConfigItem;
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+public class FaceSwapConfigTest
+{
+	private final FaceSwapConfig config = new FaceSwapConfig()
+	{
+	};
+	private final FaceSwapReleaseConfig releaseConfig = new FaceSwapReleaseConfig()
+	{
+	};
+
+	@Test
+	public void defaultsTo3dMode()
+	{
+		assertEquals(FaceSwapHead.SARDACO, config.selectedHead());
+		assertEquals(FaceSwapHead.SARDACO, FaceSwapHead.values()[0]);
+		assertEquals(FaceSwapRenderMode.MASK, FaceSwapRenderMode.values()[1]);
+		assertEquals(FaceSwapRenderMode.TWO_D, FaceSwapRenderMode.values()[2]);
+		assertEquals(FaceSwapRenderMode.THREE_D, config.renderMode());
+		assertEquals(FaceSwapRenderMode.THREE_D, releaseConfig.renderMode());
+		assertFalse(config.dkMode());
+		assertFalse(config.debugProjection());
+		assertFalse(config.opaqueBacking());
+		assertFalse(config.hideWithHeadgear());
+		assertFalse(config.debugEquipment());
+		assertEquals(34, config.helmetFaceDrop());
+		assertEquals(1, config.wrapHeightOffset());
+		assertEquals(27, config.wrapRegionHeight());
+		assertEquals(6, config.wrapScreenLift());
+		assertEquals(40, config.wrapTextureLift());
+		assertEquals(27, config.wrapTextureXOffset());
+		assertEquals(95, config.wrapTextureHeightScale());
+		assertEquals(40, config.wrapTextureTopBias());
+		assertEquals(12, config.wrapBackingExpansion());
+		assertEquals(70, config.maskWidth());
+		assertEquals(10, config.targetRadius());
+		assertEquals(FaceSwapNpcTargetScope.DISABLED, config.npcTargetScope());
+		assertEquals(0, config.maskForwardOffset());
+		assertEquals(28, config.maskBacking());
+		assertEquals(20, config.yOffset());
+		assertEquals(12, config.prototype3dGlobalYShift());
+		assertEquals(7, config.prototype3dY());
+		assertEquals(100, config.prototype3dScale());
+		assertEquals(0, config.prototype3dX());
+		assertEquals(-9, config.prototype3dZ());
+		assertEquals(100, config.prototype3dWidth());
+		assertEquals(150, config.prototype3dTextureWidth());
+		assertEquals(100, config.prototype3dFaceHeight());
+		assertEquals(100, config.prototype3dDepth());
+		assertEquals(0, config.prototypeAnimationFrameOffset());
+	}
+
+	@Test
+	public void usesSeparateNoHelmetGlobalYShift()
+	{
+		assertEquals(7, FaceSwapPlugin.resolvePrototypeGlobalYShift(false, 12));
+		assertEquals(12, FaceSwapPlugin.resolvePrototypeGlobalYShift(true, 12));
+	}
+
+	@Test
+	public void exposesOnlyReleaseControlsOutsideDeveloperMode()
+	{
+		assertEquals(Set.of(), visibleKeys(FaceSwapReleaseConfig.class));
+	}
+
+	@Test
+	public void exposesCalibrationControlsInDeveloperMode()
+	{
+		Set<String> visibleKeys = visibleKeys(FaceSwapConfig.class);
+		assertTrue(visibleKeys.contains("prototype3dGlobalYShift"));
+		assertTrue(visibleKeys.contains("prototype3dY"));
+		assertTrue(visibleKeys.contains("prototype3dTextureWidth"));
+		assertTrue(visibleKeys.contains("saveHelmetPreset"));
+		assertTrue(visibleKeys.contains("debugProjection"));
+		assertTrue(visibleKeys.contains("maskBacking"));
+		assertTrue(visibleKeys.size() > 40);
+	}
+
+	@Test
+	public void detectsIdeDebuggerArguments()
+	{
+		assertTrue(FaceSwapPlugin.isDebuggerAttached(List.of(
+			"-ea",
+			"-agentlib:jdwp=transport=dt_socket,address=127.0.0.1:5005,suspend=y,server=n")));
+		assertTrue(FaceSwapPlugin.isDebuggerAttached(List.of("-Xrunjdwp:transport=dt_socket,server=y")));
+		assertFalse(FaceSwapPlugin.isDebuggerAttached(List.of("-ea", "-Xmx1g")));
+	}
+
+	@Test
+	public void textureWidthExpandsTheSampledFaceWithoutChangingTheMesh()
+	{
+		assertEquals(0f, FaceSwapPlugin.scalePrototypeTextureU(0f, 100), 0.001f);
+		assertEquals(1f, FaceSwapPlugin.scalePrototypeTextureU(1f, 100), 0.001f);
+		assertEquals(0.25f, FaceSwapPlugin.scalePrototypeTextureU(0f, 200), 0.001f);
+		assertEquals(0.75f, FaceSwapPlugin.scalePrototypeTextureU(1f, 200), 0.001f);
+	}
+
+	private static Set<String> visibleKeys(Class<?> configClass)
+	{
+		return Arrays.stream(configClass.getMethods())
+			.map(method -> method.getAnnotation(ConfigItem.class))
+			.filter(item -> item != null)
+			.filter(item -> !item.hidden())
+			.map(ConfigItem::keyName)
+			.collect(Collectors.toSet());
+	}
+}

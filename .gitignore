@@ -1,0 +1,17 @@
+.gradle
+build
+.idea/
+.project
+.settings/
+.classpath
+nbactions.xml
+nb-configuration.xml
+nbproject/
+/dev-assets/
+/tmp/
+__pycache__/
+*.pyc
+*.blend1
+/tools/blender/backups/
+/tools/blender/*previews*/
+/tools/blender/generated_odablock_head.blend

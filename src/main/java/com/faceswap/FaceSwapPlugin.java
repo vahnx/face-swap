@@ -30,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -239,13 +240,17 @@ public class FaceSwapPlugin extends Plugin
 	private Actor hoveredPickActor;
 	private final Map<Actor, Prototype3dInstance> prototype3dInstances = new IdentityHashMap<>();
 	private final Map<String, Model> prototype3dModelCache = new HashMap<>();
+	private final Map<Actor, MaskRigInstance> maskRigInstances = new IdentityHashMap<>();
 	private RuneLiteObject prototype3dObject;
+	private Model maskRigBaseModel;
 	private int prototype3dEquippedHeadItemId = Integer.MIN_VALUE;
 	private int prototype3dLiveCalibrationItemId = Integer.MIN_VALUE;
 	private int prototype3dDebugHeadItemId = Integer.MIN_VALUE;
 	private String prototype3dDebugHeadItemText;
 	private String lastPanelStatus;
 	private String lastPanelTargetNames;
+	private final AtomicBoolean panelRefreshQueued = new AtomicBoolean();
+	private volatile String radiusPlayerNames = "";
 	private volatile Map<String, FaceSwapHead> playerHeadAssignments;
 	private volatile Map<String, FaceSwapHead> npcHeadAssignments;
 
@@ -309,6 +314,7 @@ public class FaceSwapPlugin extends Plugin
 			hotkeyListener = null;
 		}
 		removePrototype3dObject();
+		removeMaskTrackingRigs();
 		if (clientToolbar != null && navigationButton != null)
 		{
 			clientToolbar.removeNavigation(navigationButton);
@@ -455,6 +461,7 @@ public class FaceSwapPlugin extends Plugin
 			// Scene rebuilds discard RuneLiteObjects even when their Java wrappers
 			// remain active. Clear the instances so the next logged-in tick recreates them.
 			removePrototype3dObject();
+			removeMaskTrackingRigs();
 		}
 	}
 
@@ -464,7 +471,19 @@ public class FaceSwapPlugin extends Plugin
 		Player localPlayer = client.getLocalPlayer();
 		updateHoveredPickActor();
 		updatePrototype3dHeadItemDebug(localPlayer);
+		updateRadiusPlayerNames();
 		refreshPanelStatusIfChanged();
+		if (config.renderMode() == FaceSwapRenderMode.MASK
+			&& getMaskTrackingMode() != MaskTrackingMode.MERGED_MODEL
+			&& client.getGameState() == GameState.LOGGED_IN
+			&& localPlayer != null)
+		{
+			updateMaskTrackingRigs();
+		}
+		else
+		{
+			removeMaskTrackingRigs();
+		}
 		if (!isPrototype3dEnabled() || client.getGameState() != GameState.LOGGED_IN || localPlayer == null)
 		{
 			removePrototype3dObject();
@@ -685,6 +704,10 @@ public class FaceSwapPlugin extends Plugin
 			|| HELMET_PROFILE_CONFIG_KEYS.contains(event.getKey()))
 		{
 			clientThread.invoke(this::removePrototype3dObject);
+		}
+		if ("renderMode".equals(event.getKey()) || "maskTrackingMode".equals(event.getKey()))
+		{
+			clientThread.invoke(this::removeMaskTrackingRigs);
 		}
 	}
 
@@ -953,6 +976,99 @@ public class FaceSwapPlugin extends Plugin
 			instance.object.setOrientation(actor.getCurrentOrientation());
 			syncPrototypeAnimation(actor, instance);
 		}
+		for (Map.Entry<Actor, MaskRigInstance> entry : maskRigInstances.entrySet())
+		{
+			syncMaskRigAnimation(entry.getKey(), entry.getValue());
+		}
+	}
+
+	private void updateMaskTrackingRigs()
+	{
+		Set<Actor> activeActors = Collections.newSetFromMap(new IdentityHashMap<>());
+		for (Player player : client.getPlayers())
+		{
+			if (getAssignedHead(player) != null)
+			{
+				updateMaskTrackingRig(player);
+				activeActors.add(player);
+			}
+		}
+		for (NPC npc : client.getNpcs())
+		{
+			if (getMaskTrackingMode() == MaskTrackingMode.ANIMATED_RIG
+				&& getAssignedHead(npc) != null)
+			{
+				updateMaskTrackingRig(npc);
+				activeActors.add(npc);
+			}
+		}
+		maskRigInstances.keySet().removeIf(actor -> !activeActors.contains(actor));
+	}
+
+	private void updateMaskTrackingRig(Actor actor)
+	{
+		if (maskRigInstances.containsKey(actor))
+		{
+			return;
+		}
+		if (maskRigBaseModel == null)
+		{
+			maskRigBaseModel = createMaskTrackingRigModel();
+		}
+		if (maskRigBaseModel == null)
+		{
+			return;
+		}
+
+		RuneLiteObject object = client.createRuneLiteObject();
+		object.setModel(maskRigBaseModel);
+		maskRigInstances.put(actor, new MaskRigInstance(object));
+	}
+
+	private Model createMaskTrackingRigModel()
+	{
+		ModelData[] rigParts = new ModelData[MALE_ANCHOR_MODEL_IDS.length + 2];
+		rigParts[0] = clonePrototypeModel(RIGGED_HEAD_MODEL_ID);
+		rigParts[1] = clonePrototypeModel(RIGGED_JAW_MODEL_ID);
+		if (rigParts[0] == null || rigParts[1] == null)
+		{
+			return null;
+		}
+		for (int index = 0; index < MALE_ANCHOR_MODEL_IDS.length; index++)
+		{
+			rigParts[index + 2] = clonePrototypeModel(MALE_ANCHOR_MODEL_IDS[index]);
+			if (rigParts[index + 2] == null)
+			{
+				return null;
+			}
+		}
+		return client.mergeModels(rigParts).light();
+	}
+
+	Model getMaskRigModel(Actor actor)
+	{
+		MaskRigInstance instance = maskRigInstances.get(actor);
+		if (instance == null)
+		{
+			return null;
+		}
+		syncMaskRigAnimation(actor, instance);
+		return instance.object.getModel();
+	}
+
+	Model getMaskRigBaseModel()
+	{
+		return maskRigBaseModel;
+	}
+
+	MaskTrackingMode getMaskTrackingMode()
+	{
+		return resolveMaskTrackingMode(isDebugLaunch(), config.maskTrackingMode());
+	}
+
+	static MaskTrackingMode resolveMaskTrackingMode(boolean debugLaunch, MaskTrackingMode configuredMode)
+	{
+		return debugLaunch && configuredMode != null ? configuredMode : MaskTrackingMode.AUTO;
 	}
 
 	private Model createPrototype3dModel(int height, int scale, int x, int z, int pitch, int yaw, int roll,
@@ -1410,6 +1526,48 @@ public class FaceSwapPlugin extends Plugin
 		}
 	}
 
+	private void syncMaskRigAnimation(Actor actor, MaskRigInstance instance)
+	{
+		int actionAnimation = actor.getAnimation();
+		int poseAnimation = actor.getPoseAnimation();
+		boolean suppressIdlePose = actionAnimation >= 0 && poseAnimation == actor.getIdlePoseAnimation();
+		if (poseAnimation < 0 || suppressIdlePose)
+		{
+			instance.poseController = null;
+			instance.object.setPoseAnimationController(null);
+		}
+		else
+		{
+			if (instance.poseController == null
+				|| instance.poseController.getAnimation() == null
+				|| instance.poseController.getAnimation().getId() != poseAnimation)
+			{
+				instance.poseController = new AnimationController(client, poseAnimation);
+				instance.object.setPoseAnimationController(instance.poseController);
+			}
+			instance.poseController.setFrame(offsetAnimationFrame(
+				instance.poseController.getAnimation(), actor.getPoseAnimationFrame(), 0));
+		}
+
+		if (actionAnimation < 0)
+		{
+			instance.actionController = null;
+			instance.object.setAnimationController(null);
+		}
+		else
+		{
+			if (instance.actionController == null
+				|| instance.actionController.getAnimation() == null
+				|| instance.actionController.getAnimation().getId() != actionAnimation)
+			{
+				instance.actionController = new AnimationController(client, actionAnimation);
+				instance.object.setAnimationController(instance.actionController);
+			}
+			instance.actionController.setFrame(offsetAnimationFrame(
+				instance.actionController.getAnimation(), actor.getAnimationFrame(), 0));
+		}
+	}
+
 	private static int offsetAnimationFrame(Animation animation, int frame, int offset)
 	{
 		if (animation == null)
@@ -1656,6 +1814,12 @@ public class FaceSwapPlugin extends Plugin
 				}
 			});
 		}
+	}
+
+	private void removeMaskTrackingRigs()
+	{
+		maskRigInstances.clear();
+		maskRigBaseModel = null;
 	}
 
 	private void removePrototype3dInstance(Actor actor)
@@ -2611,26 +2775,33 @@ public class FaceSwapPlugin extends Plugin
 
 	private void refreshPanel()
 	{
+		if (panel == null || !panelRefreshQueued.compareAndSet(false, true))
+		{
+			return;
+		}
+
+		clientThread.invoke(() ->
+		{
+			panelRefreshQueued.set(false);
+			refreshPanelOnClientThread();
+		});
+	}
+
+	private void refreshPanelOnClientThread()
+	{
 		FaceSwapPanel currentPanel = panel;
 		if (currentPanel != null)
 		{
 			FaceSwapPanelState state = createPanelState();
 			lastPanelStatus = state.statusText;
 			lastPanelTargetNames = state.targetNames;
-			if (SwingUtilities.isEventDispatchThread())
+			SwingUtilities.invokeLater(() ->
 			{
-				currentPanel.refreshState(state);
-			}
-			else
-			{
-				SwingUtilities.invokeLater(() ->
+				if (panel == currentPanel)
 				{
-					if (panel == currentPanel)
-					{
-						currentPanel.refreshState(state);
-					}
-				});
-			}
+					currentPanel.refreshState(state);
+				}
+			});
 		}
 	}
 
@@ -2647,7 +2818,7 @@ public class FaceSwapPlugin extends Plugin
 	private String getPanelTargetNames()
 	{
 		return config.targetScope() == FaceSwapTargetScope.RADIUS
-			? getRadiusPlayerNames()
+			? radiusPlayerNames
 			: getTargetNames(getEffectiveSelectedHead());
 	}
 
@@ -2671,7 +2842,7 @@ public class FaceSwapPlugin extends Plugin
 	private String buildStatusText()
 	{
 		String wraparoundStatus = config.renderMode() == FaceSwapRenderMode.TWO_D
-			? "Wraparounds will disappear when a player is wearing a helmet."
+			? "Wraparounds will disappear when a player is wearing a helmet. Wraparound will also glitch out while using a weapon."
 			: "";
 		String targetStatus;
 		if (pickPlayerMode)
@@ -2739,9 +2910,15 @@ public class FaceSwapPlugin extends Plugin
 		return assignments;
 	}
 
-	private String getRadiusPlayerNames()
+	private void updateRadiusPlayerNames()
 	{
-		return client.getPlayers().stream()
+		if (config.targetScope() != FaceSwapTargetScope.RADIUS)
+		{
+			radiusPlayerNames = "";
+			return;
+		}
+
+		radiusPlayerNames = client.getPlayers().stream()
 			.filter(this::isPlayerWithinTargetRadius)
 			.map(Player::getName)
 			.filter(Objects::nonNull)
@@ -2870,6 +3047,18 @@ public class FaceSwapPlugin extends Plugin
 		{
 			this.object = object;
 			this.modelKey = modelKey;
+		}
+	}
+
+	private static final class MaskRigInstance
+	{
+		private final RuneLiteObject object;
+		private AnimationController poseController;
+		private AnimationController actionController;
+
+		private MaskRigInstance(RuneLiteObject object)
+		{
+			this.object = object;
 		}
 	}
 

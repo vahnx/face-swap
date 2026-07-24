@@ -10,6 +10,7 @@ public enum FaceSwapHead
 	BEGGAR("Beggar", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	TPAPASLICE("TPapaSlice", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	ZECOOKIES("ZeCookies", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
+	PRISONJOE("Prison Joe", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	PURESPAM("Purespam", FaceSwapHeadCategory.CONTENT_CREATOR, false, false),
 	TORVESTA("Torvesta", FaceSwapHeadCategory.CONTENT_CREATOR, false, false),
 	AGENT("Agent", FaceSwapHeadCategory.FICTIONAL_CHARACTER, true, true),

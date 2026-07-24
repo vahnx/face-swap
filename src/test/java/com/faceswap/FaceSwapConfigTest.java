@@ -44,12 +44,13 @@ public class FaceSwapConfigTest
 		assertEquals(40, config.wrapTextureTopBias());
 		assertEquals(12, config.wrapBackingExpansion());
 		assertEquals(70, config.maskWidth());
+		assertEquals(MaskTrackingMode.AUTO, config.maskTrackingMode());
 		assertEquals(10, config.targetRadius());
 		assertEquals(FaceSwapNpcTargetScope.DISABLED, config.npcTargetScope());
 		assertEquals(0, config.maskForwardOffset());
 		assertEquals(28, config.maskBacking());
-		assertEquals(20, config.yOffset());
-		assertEquals(20, config.maskAngle());
+		assertEquals(10, config.yOffset());
+		assertEquals(0, config.maskAngle());
 		assertEquals(0, config.maskYaw());
 		assertEquals(0, config.maskRoll());
 		assertEquals(12, config.prototype3dGlobalYShift());
@@ -87,10 +88,25 @@ public class FaceSwapConfigTest
 		assertTrue(visibleKeys.contains("saveHelmetPreset"));
 		assertTrue(visibleKeys.contains("debugProjection"));
 		assertTrue(visibleKeys.contains("maskBacking"));
+		assertTrue(visibleKeys.contains("maskTrackingMode"));
 		assertTrue(visibleKeys.contains("maskAngle"));
 		assertTrue(visibleKeys.contains("maskYaw"));
 		assertTrue(visibleKeys.contains("maskRoll"));
 		assertTrue(visibleKeys.size() > 40);
+	}
+
+	@Test
+	public void maskTrackingModesHaveDeveloperFriendlyLabels()
+	{
+		assertEquals("Automatic", MaskTrackingMode.AUTO.toString());
+		assertEquals("Animated Rig", MaskTrackingMode.ANIMATED_RIG.toString());
+		assertEquals("Merged Model (Fallback)", MaskTrackingMode.MERGED_MODEL.toString());
+		assertEquals(MaskTrackingMode.ANIMATED_RIG,
+			FaceSwapPlugin.resolveMaskTrackingMode(true, MaskTrackingMode.ANIMATED_RIG));
+		assertEquals(MaskTrackingMode.MERGED_MODEL,
+			FaceSwapPlugin.resolveMaskTrackingMode(true, MaskTrackingMode.MERGED_MODEL));
+		assertEquals(MaskTrackingMode.AUTO,
+			FaceSwapPlugin.resolveMaskTrackingMode(false, MaskTrackingMode.MERGED_MODEL));
 	}
 
 	@Test

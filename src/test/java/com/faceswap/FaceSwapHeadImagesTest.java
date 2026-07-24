@@ -43,7 +43,8 @@ public class FaceSwapHeadImagesTest
 			FaceSwapHead.DEARLOLA,
 			FaceSwapHead.BEGGAR,
 			FaceSwapHead.TPAPASLICE,
-			FaceSwapHead.ZECOOKIES
+			FaceSwapHead.ZECOOKIES,
+			FaceSwapHead.PRISONJOE
 		};
 
 		for (FaceSwapHead head : approvedHeads)

@@ -11,7 +11,7 @@ public interface FaceSwapConfig extends Config
 {
 	@ConfigSection(
 		name = "Wraparound",
-		description = "Projected head wrap calibration and debug settings",
+		description = "Projected head wrap calibration, followed by open-face helmet fit controls",
 		position = 1,
 		closedByDefault = true
 	)
@@ -24,14 +24,6 @@ public interface FaceSwapConfig extends Config
 		closedByDefault = true
 	)
 	String FACE_MASK_SECTION = "faceMask";
-
-	@ConfigSection(
-		name = "Wraparound Helmets",
-		description = "Open-face helmet calibration for Wraparound mode",
-		position = 2,
-		closedByDefault = true
-	)
-	String PARTIAL_HELMET_SECTION = "partialHelmet";
 
 	@ConfigSection(
 		name = "3D Mode",
@@ -324,10 +316,10 @@ public interface FaceSwapConfig extends Config
 
 	@ConfigItem(
 		keyName = "partialHelmetFaceWindow",
-		name = "Preserve Helmet",
+		name = "Helmet Occlusion",
 		description = "Restores helmet geometry over the wrapped face so the face remains on the player and below open-face headgear.",
-		position = 0,
-		section = PARTIAL_HELMET_SECTION
+		position = 20,
+		section = WRAPAROUND_SECTION
 	)
 	default boolean helmetOcclusion()
 	{
@@ -338,8 +330,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetRegionHeight",
 		name = "Helmet Region Height",
 		description = "Model-space height of the exposed face band when rendering through open-face helmets.",
-		position = 1,
-		section = PARTIAL_HELMET_SECTION
+		position = 21,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 12,
@@ -354,8 +346,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetWidth",
 		name = "Helmet Width",
 		description = "Width of the inner face shell. Helmet triangles outside this boundary are preserved over the face.",
-		position = 2,
-		section = PARTIAL_HELMET_SECTION
+		position = 22,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 30,
@@ -370,8 +362,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetDepth",
 		name = "Helmet Depth",
 		description = "Depth of the inner face shell. Helmet triangles outside this boundary are preserved over the face.",
-		position = 3,
-		section = PARTIAL_HELMET_SECTION
+		position = 23,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 20,
@@ -386,8 +378,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetFrontDepth",
 		name = "Helmet Front Depth",
 		description = "Front-side depth of the inner face shell. Lower values preserve more front helmet geometry over the face.",
-		position = 4,
-		section = PARTIAL_HELMET_SECTION
+		position = 24,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 20,
@@ -402,8 +394,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetTopPreserve",
 		name = "Helmet Top Preserve",
 		description = "Model-space height from the top of the helmet band that is always preserved over the face.",
-		position = 5,
-		section = PARTIAL_HELMET_SECTION
+		position = 25,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 0,
@@ -418,8 +410,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetTextureTop",
 		name = "Helmet Texture Top",
 		description = "Top texture crop percentage for open-face helmet rendering.",
-		position = 6,
-		section = PARTIAL_HELMET_SECTION
+		position = 26,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 0,
@@ -434,8 +426,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetTextureBottom",
 		name = "Helmet Texture Bottom",
 		description = "Bottom texture crop percentage for open-face helmet rendering.",
-		position = 7,
-		section = PARTIAL_HELMET_SECTION
+		position = 27,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 40,
@@ -450,8 +442,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetTextureLift",
 		name = "Helmet Texture Lift",
 		description = "Moves only the open-helmet PNG artwork. Negative values move facial features downward without affecting bare heads.",
-		position = 8,
-		section = PARTIAL_HELMET_SECTION
+		position = 28,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = -80,
@@ -466,8 +458,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetClipTop",
 		name = "Helmet Clip Top",
 		description = "Top inset of the model-space band where helmet geometry is preserved. Negative values extend it upward.",
-		position = 9,
-		section = PARTIAL_HELMET_SECTION
+		position = 29,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = -60,
@@ -482,8 +474,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetClipBottom",
 		name = "Helmet Clip Bottom",
 		description = "Bottom inset of the model-space band where helmet geometry is preserved. Negative values extend it downward.",
-		position = 10,
-		section = PARTIAL_HELMET_SECTION
+		position = 30,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = -30,
@@ -498,8 +490,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "partialHelmetBackingExpansion",
 		name = "Helmet Backing",
 		description = "Backing expansion for open-face helmet rendering. Keep low to avoid painting onto helmet geometry.",
-		position = 11,
-		section = PARTIAL_HELMET_SECTION
+		position = 31,
+		section = WRAPAROUND_SECTION
 	)
 	@Range(
 		min = 0,
@@ -511,10 +503,22 @@ public interface FaceSwapConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "maskTrackingMode",
+		name = "Mask Tracking",
+		description = "Developer comparison control. Automatic uses the animated equipment-free rig and falls back to merged-model tracking.",
+		position = 0,
+		section = FACE_MASK_SECTION
+	)
+	default MaskTrackingMode maskTrackingMode()
+	{
+		return MaskTrackingMode.AUTO;
+	}
+
+	@ConfigItem(
 		keyName = "overlaySize",
 		name = "Mask Size",
 		description = "Size of the projected mask panel relative to the default value of 32",
-		position = 0,
+		position = 1,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -530,7 +534,7 @@ public interface FaceSwapConfig extends Config
 		keyName = "maskWidth",
 		name = "Mask Width",
 		description = "Horizontal size of the projected mask as a percentage of the detected face width.",
-		position = 1,
+		position = 2,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -546,7 +550,7 @@ public interface FaceSwapConfig extends Config
 		keyName = "heightOffset",
 		name = "Mask Height",
 		description = "Model-space mask height above the player origin. Lower values move the mask down.",
-		position = 2,
+		position = 3,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -562,7 +566,7 @@ public interface FaceSwapConfig extends Config
 		keyName = "maskForwardOffset",
 		name = "Mask Depth",
 		description = "Distance outside the detected face surface. Positive values move the mask outward.",
-		position = 3,
+		position = 4,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -578,7 +582,7 @@ public interface FaceSwapConfig extends Config
 		keyName = "maskBacking",
 		name = "Mask Backing",
 		description = "Rear strap anchor as a percentage of detected head depth. Lower values close the strap nearer the head center.",
-		position = 4,
+		position = 5,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -594,7 +598,7 @@ public interface FaceSwapConfig extends Config
 		keyName = "xOffset",
 		name = "Mask X",
 		description = "Horizontal mask adjustment in screen pixels after projection",
-		position = 5,
+		position = 6,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -610,7 +614,7 @@ public interface FaceSwapConfig extends Config
 		keyName = "yOffset",
 		name = "Mask Y",
 		description = "Vertical mask adjustment in screen pixels. Positive values move the mask down.",
-		position = 6,
+		position = 7,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -619,14 +623,14 @@ public interface FaceSwapConfig extends Config
 	)
 	default int yOffset()
 	{
-		return 20;
+		return 10;
 	}
 
 	@ConfigItem(
 		keyName = "maskAngle",
 		name = "Mask Pitch",
 		description = "Additional rotation around the local X axis. Positive values tilt the mask downward.",
-		position = 7,
+		position = 8,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -635,14 +639,14 @@ public interface FaceSwapConfig extends Config
 	)
 	default int maskAngle()
 	{
-		return 20;
+		return 0;
 	}
 
 	@ConfigItem(
 		keyName = "maskYaw",
 		name = "Mask Yaw",
 		description = "Additional rotation around the local Y axis. Use this to turn the mask left or right.",
-		position = 8,
+		position = 9,
 		section = FACE_MASK_SECTION
 	)
 	@Range(
@@ -658,7 +662,7 @@ public interface FaceSwapConfig extends Config
 		keyName = "maskRoll",
 		name = "Mask Roll",
 		description = "Additional rotation around the local Z axis. Use this to spin the mask clockwise or counterclockwise.",
-		position = 9,
+		position = 10,
 		section = FACE_MASK_SECTION
 	)
 	@Range(

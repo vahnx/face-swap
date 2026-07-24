@@ -36,28 +36,42 @@ pitch, yaw, and roll corrections.
 - More per-item patches do not solve the underlying lack of an equipment-independent
   animated head anchor.
 
-## Planned Tracker: Animated Head Rig
+## Primary Tracker: Animated Head Rig
 
-The preferred replacement is a lightweight, equipment-independent head rig for each
-target. The rig should provide the animated head position and orientation, while the
-actual rendered player model is used only for visibility and occlusion decisions.
-Helmet profiles should then describe visual fit or clipping, not compensate for
-tracking errors.
+Mask style now uses a lightweight, equipment-independent head rig for each targeted
+player. The plugin builds one shared neutral rig model and gives each actor independent
+pose and action animation controllers synchronized to the actor's current animation
+frames. The rig is never registered as a visible scene object.
 
-The new implementation must use an explicit tracking strategy boundary. The merged
-model tracker documented above must remain available as a fallback while the rig is
-developed and validated.
+`FaceSwapOverlay` reads the animated rig vertices through a `MaskPoseTracker` strategy
+and derives the mask center and local axes from known head geometry. The actual actor
+model is used for bounds validation and mask occlusion, not as the primary pose source.
+Legacy helmet Y, pitch, yaw, and roll corrections are not applied to player masks
+using the animated rig. Those corrections were calibrated against equipment-contaminated
+merged models and remain available only to the merged-model tracker. Global developer
+mask calibration controls still apply to both trackers.
 
-## Migration Requirements
+### Tracking Modes
 
-- Keep the existing merged-model implementation intact behind a strategy or fallback
-  path rather than rewriting it in place.
-- Fall back automatically if the rig cannot produce a valid pose for a target.
-- Retain a developer-only way to force either tracker for comparison.
+- `Automatic` uses the animated rig for players and falls back to the merged-model
+  tracker when a rig or pose is unavailable or invalid.
+- `Animated Rig` forces the rig in debugger launches, including for NPC experiments.
+- `Merged Model (Fallback)` forces the preserved implementation for comparison.
+- Normal non-debug launches always use `Automatic`, regardless of a persisted
+  developer selection.
+
+NPC animation skeletons are not universally compatible with the player rig. Automatic
+mode therefore retains merged-model tracking for NPCs. The forced rig mode allows
+individual humanoid NPC animations to be evaluated without changing release behavior.
+
+## Validation Requirements
+
 - Compare both trackers across idle, running, zooming, equipment changes, region
   changes, temporary skilling actions, and representative emotes.
-- Remove neither the implementation nor this documentation until the replacement is
-  proven more reliable in those cases.
+- Specifically retest no equipment, Fang, Soulreaper axe, med helms, Crystal helm,
+  Serpentine helm, and previously problematic utility animations.
+- Keep the merged-model implementation and fallback tag until the rig has passed
+  in-game validation.
 
 ## Git Checkpoint
 

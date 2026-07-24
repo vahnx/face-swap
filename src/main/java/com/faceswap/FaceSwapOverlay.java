@@ -31,6 +31,7 @@ import net.runelite.api.PlayerComposition;
 import net.runelite.api.Point;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.gameval.AnimationID;
 import net.runelite.api.kit.KitType;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
@@ -48,6 +49,7 @@ class FaceSwapOverlay extends Overlay
 	private static final float ANIMATED_HEAD_CENTER_LIMIT = 40f;
 	private static final float MASK_BINDING_MAX_VERTICAL_DRIFT = 36f;
 	private static final float MASK_TRANSIENT_MAX_CENTER_DISTANCE = 128f;
+	private static final float EQUIPPED_ACTION_MASK_PITCH_DEGREES = 7f;
 	private static final float HELMET_MASK_BINDING_CORE_RADIUS = 28f;
 	private static final int HELMET_MASK_BINDING_MIN_CORE_VERTICES = 12;
 	private static final float SHIELD_WIDTH_SCALE = 1.24f;
@@ -64,7 +66,6 @@ class FaceSwapOverlay extends Overlay
 	private final FaceSwapPlugin plugin;
 	private final Map<Actor, MaskHeadBinding> maskHeadBindings = new WeakHashMap<>();
 	private final Map<Actor, MaskHeadPose> maskHeadPoses = new WeakHashMap<>();
-	private final Map<Actor, Integer> maskRenderOffsets = new WeakHashMap<>();
 
 	@Inject
 	FaceSwapOverlay(Client client, FaceSwapPlugin plugin)
@@ -251,8 +252,18 @@ class FaceSwapOverlay extends Overlay
 		float maskScale = plugin.getOverlaySize() / 32f;
 		float maskHeight = plugin.getWrapRegionHeight() * maskScale;
 		MaskHeadPose headPose = getAnimatedMaskHeadPose(player, model, bounds);
+		HelmetProfile helmetProfile = getHelmetProfile(player);
+		headPose = headPose.withPitchDegrees(
+			resolveMaskPitchCalibration(
+				plugin.getMaskPitch(), helmetProfile == null ? 0 : helmetProfile.getMaskPitch()));
+		headPose = headPose.withYawDegrees(
+			resolveMaskCalibration(
+				plugin.getMaskYaw(), helmetProfile == null ? 0 : helmetProfile.getMaskYaw()));
+		headPose = headPose.withRollDegrees(
+			resolveMaskCalibration(
+				plugin.getMaskRoll(), helmetProfile == null ? 0 : helmetProfile.getMaskRoll()));
 		headPose = headPose.withCenterY(
-			headPose.centerY + plugin.getYOffset() + getHelmetMaskYOffset(player));
+			headPose.centerY + plugin.getYOffset() + (helmetProfile == null ? 0 : helmetProfile.getMaskY()));
 		HeadRegion maskHeadRegion = getMaskHeadRegion(bounds, player);
 		float top = -maskHeight / 2f;
 		float bottom = maskHeight / 2f;
@@ -263,7 +274,6 @@ class FaceSwapOverlay extends Overlay
 		float frontZ = -headDepth - plugin.getMaskForwardOffset();
 		float backZ = headDepth * plugin.getMaskBacking() / 100f;
 
-		int renderOffsetY = 0;
 		float[] verticesX = model.getVerticesX();
 		float[] verticesY = model.getVerticesY();
 		float[] verticesZ = model.getVerticesZ();
@@ -272,20 +282,9 @@ class FaceSwapOverlay extends Overlay
 		{
 			modelProjection = projectModelVertices(
 				worldView, localLocation, tileHeight, orientation, model, verticesX, verticesY, verticesZ);
-			Shape playerHull = player.getConvexHull();
-			Rectangle projectedBounds = modelProjection == null ? null : modelProjection.getBounds();
-			if (playerHull != null && projectedBounds != null && player.getAnimation() < 0)
-			{
-				renderOffsetY = (int) Math.round(playerHull.getBounds().getCenterY() - projectedBounds.getCenterY());
-				maskRenderOffsets.put(player, renderOffsetY);
-			}
-			else
-			{
-				renderOffsetY = maskRenderOffsets.getOrDefault(player, 0);
-			}
 		}
 		int screenX = plugin.getXOffset();
-		int screenY = renderOffsetY;
+		int screenY = 0;
 
 		Point topLeft = projectMaskVertex(worldView, localLocation, tileHeight, orientation, headPose, -halfWidth, top, frontZ);
 		Point topRight = projectMaskVertex(worldView, localLocation, tileHeight, orientation, headPose, halfWidth, top, frontZ);
@@ -430,7 +429,7 @@ class FaceSwapOverlay extends Overlay
 				new int[] {topLeft.getX(), topRight.getX(), bottomRight.getX(), bottomLeft.getX()},
 				new int[] {topLeft.getY(), topRight.getY(), bottomRight.getY(), bottomLeft.getY()},
 				4));
-			visibleMask.subtract(getProjectedMaskHeadOcclusion(modelProjection, player, renderOffsetY));
+			visibleMask.subtract(getProjectedMaskHeadOcclusion(modelProjection, player));
 			graphics.clip(visibleMask);
 		}
 
@@ -501,12 +500,35 @@ class FaceSwapOverlay extends Overlay
 						// the bound head center, but do not let a tool rotate the mask.
 						animatedPose = animatedPose.withAxesFrom(previousPose);
 						animatedPose = stabilizeMaskPoseForEquipment(
-							animatedPose, headItemId, weaponItemId);
+							animatedPose, headItemId, weaponItemId, player.getAnimation());
 						maskHeadPoses.put(player, animatedPose);
 						return animatedPose;
 					}
 				}
-				return stabilizeMaskPoseForEquipment(previousPose, headItemId, weaponItemId);
+				MaskHeadBinding transientBinding = createMaskHeadBinding(
+					model,
+					getAnimatedMaskHeadRegion(
+						model, bounds, player, previousPose.centerX, previousPose.centerZ),
+					headItemId,
+					appearanceFingerprint,
+					previousPose.centerX,
+					previousPose.centerZ);
+				if (transientBinding != null)
+				{
+					MaskHeadPose transientPose = transientBinding.getAbsolutePose(
+						verticesX, verticesY, verticesZ, -plugin.getHeightOffset());
+					if (transientPose.centerDistanceSquared(previousPose)
+						<= MASK_TRANSIENT_MAX_CENTER_DISTANCE * MASK_TRANSIENT_MAX_CENTER_DISTANCE)
+					{
+						transientPose = transientPose.withAxesFrom(previousPose);
+						transientPose = stabilizeMaskPoseForEquipment(
+							transientPose, headItemId, weaponItemId, player.getAnimation());
+						maskHeadPoses.put(player, transientPose);
+						return transientPose;
+					}
+				}
+				return stabilizeMaskPoseForEquipment(
+					previousPose, headItemId, weaponItemId, player.getAnimation());
 			}
 			binding = createMaskHeadBinding(
 				model,
@@ -526,7 +548,7 @@ class FaceSwapOverlay extends Overlay
 				MaskHeadPose transientPose = binding.getAbsolutePose(verticesX, verticesY, verticesZ,
 					-plugin.getHeightOffset());
 				transientPose = stabilizeMaskPoseForEquipment(
-					transientPose, headItemId, weaponItemId);
+					transientPose, headItemId, weaponItemId, player.getAnimation());
 				maskHeadPoses.put(player, transientPose);
 				return transientPose;
 			}
@@ -557,36 +579,53 @@ class FaceSwapOverlay extends Overlay
 				}
 			}
 		}
-		pose = stabilizeMaskPoseForEquipment(pose, headItemId, weaponItemId);
+		pose = stabilizeMaskPoseForEquipment(
+			pose, headItemId, weaponItemId, player.getAnimation());
 		maskHeadPoses.put(player, pose);
 		return pose;
 	}
 
-	private static int getHelmetMaskYOffset(Actor actor)
+	private static HelmetProfile getHelmetProfile(Actor actor)
 	{
 		if (!(actor instanceof Player))
 		{
-			return 0;
+			return null;
 		}
 		PlayerComposition composition = ((Player) actor).getPlayerComposition();
 		if (composition == null)
 		{
-			return 0;
+			return null;
 		}
-		HelmetProfile profile = HelmetProfiles.find(composition.getEquipmentId(KitType.HEAD));
-		return profile == null ? 0 : profile.getMaskY();
+		return HelmetProfiles.find(composition.getEquipmentId(KitType.HEAD));
 	}
 
 	private static MaskHeadPose stabilizeMaskPoseForEquipment(
 		MaskHeadPose pose,
 		int headItemId,
-		int weaponItemId)
+		int weaponItemId,
+		int animationId)
 	{
-		if (isSoulreaperAxe(weaponItemId))
+		boolean actionAnimation = animationId >= 0;
+		MaskHeadPose stabilizedPose;
+		if (isSoulreaperAxe(weaponItemId)
+			|| (actionAnimation && headItemId == ItemID.MENAPHITE_PURPLE_HAT))
 		{
-			return pose.withActorAxes();
+			stabilizedPose = pose.withActorAxes();
 		}
-		return FaceSwapPlugin.isMedHelmItem(headItemId) ? pose.withYawOnlyAxes() : pose;
+		else if (animationId == AnimationID.EMOTE_DANCE_HEADBANG
+			|| animationId == AnimationID.EMOTE_DANCE_HEADBANG_LOOP)
+		{
+			stabilizedPose = pose.withYawOnlyAxes();
+		}
+		else
+		{
+			stabilizedPose = FaceSwapPlugin.isMedHelmItem(headItemId)
+				? pose.withYawOnlyAxes()
+				: pose;
+		}
+		return actionAnimation && (headItemId >= 0 || weaponItemId >= 0)
+			? stabilizedPose.withPitchDegrees(EQUIPPED_ACTION_MASK_PITCH_DEGREES)
+			: stabilizedPose;
 	}
 
 	private static boolean isSoulreaperAxe(int itemId)
@@ -629,6 +668,18 @@ class FaceSwapOverlay extends Overlay
 		int headItemId,
 		int appearanceFingerprint)
 	{
+		return createMaskHeadBinding(
+			model, headRegion, headItemId, appearanceFingerprint, 0f, 0f);
+	}
+
+	private MaskHeadBinding createMaskHeadBinding(
+		Model model,
+		HeadRegion headRegion,
+		int headItemId,
+		int appearanceFingerprint,
+		float centerX,
+		float centerZ)
+	{
 		float[] verticesX = model.getVerticesX();
 		float[] verticesY = model.getVerticesY();
 		float[] verticesZ = model.getVerticesZ();
@@ -649,9 +700,9 @@ class FaceSwapOverlay extends Overlay
 			int b = face2[face];
 			int c = face3[face];
 			if (!isHeadTriangle(
-				verticesX[a], verticesY[a], verticesZ[a],
-				verticesX[b], verticesY[b], verticesZ[b],
-				verticesX[c], verticesY[c], verticesZ[c],
+				verticesX[a] - centerX, verticesY[a], verticesZ[a] - centerZ,
+				verticesX[b] - centerX, verticesY[b], verticesZ[b] - centerZ,
+				verticesX[c] - centerX, verticesY[c], verticesZ[c] - centerZ,
 				headRegion))
 			{
 				continue;
@@ -687,7 +738,8 @@ class FaceSwapOverlay extends Overlay
 		}
 		if (headItemId >= 0 && !FaceSwapPlugin.isMedHelmItem(headItemId))
 		{
-			int[] coreIndices = selectMaskBindingCore(indices, verticesX, verticesZ);
+			int[] coreIndices = selectMaskBindingCore(
+				indices, verticesX, verticesZ, centerX, centerZ);
 			if (coreIndices.length >= HELMET_MASK_BINDING_MIN_CORE_VERTICES)
 			{
 				indices = coreIndices;
@@ -697,13 +749,18 @@ class FaceSwapOverlay extends Overlay
 			appearanceFingerprint, indices, verticesX, verticesY, verticesZ);
 	}
 
-	private static int[] selectMaskBindingCore(int[] indices, float[] verticesX, float[] verticesZ)
+	private static int[] selectMaskBindingCore(
+		int[] indices,
+		float[] verticesX,
+		float[] verticesZ,
+		float centerX,
+		float centerZ)
 	{
 		int count = 0;
 		for (int index : indices)
 		{
-			if (Math.abs(verticesX[index]) <= HELMET_MASK_BINDING_CORE_RADIUS
-				&& Math.abs(verticesZ[index]) <= HELMET_MASK_BINDING_CORE_RADIUS)
+			if (Math.abs(verticesX[index] - centerX) <= HELMET_MASK_BINDING_CORE_RADIUS
+				&& Math.abs(verticesZ[index] - centerZ) <= HELMET_MASK_BINDING_CORE_RADIUS)
 			{
 				count++;
 			}
@@ -713,8 +770,8 @@ class FaceSwapOverlay extends Overlay
 		int destination = 0;
 		for (int index : indices)
 		{
-			if (Math.abs(verticesX[index]) <= HELMET_MASK_BINDING_CORE_RADIUS
-				&& Math.abs(verticesZ[index]) <= HELMET_MASK_BINDING_CORE_RADIUS)
+			if (Math.abs(verticesX[index] - centerX) <= HELMET_MASK_BINDING_CORE_RADIUS
+				&& Math.abs(verticesZ[index] - centerZ) <= HELMET_MASK_BINDING_CORE_RADIUS)
 			{
 				core[destination++] = index;
 			}
@@ -723,6 +780,16 @@ class FaceSwapOverlay extends Overlay
 	}
 
 	private HeadRegion getAnimatedMaskHeadRegion(Model model, ModelBounds bounds, Actor actor)
+	{
+		return getAnimatedMaskHeadRegion(model, bounds, actor, 0f, 0f);
+	}
+
+	private HeadRegion getAnimatedMaskHeadRegion(
+		Model model,
+		ModelBounds bounds,
+		Actor actor,
+		float centerX,
+		float centerZ)
 	{
 		HeadRegion fallback = getMaskHeadRegion(bounds, actor);
 		if (!(actor instanceof Player))
@@ -742,8 +809,8 @@ class FaceSwapOverlay extends Overlay
 		int centralCount = 0;
 		for (int vertex = 0; vertex < model.getVerticesCount(); vertex++)
 		{
-			if (Math.abs(verticesX[vertex]) <= ANIMATED_HEAD_CENTER_LIMIT
-				&& Math.abs(verticesZ[vertex]) <= ANIMATED_HEAD_CENTER_LIMIT)
+			if (Math.abs(verticesX[vertex] - centerX) <= ANIMATED_HEAD_CENTER_LIMIT
+				&& Math.abs(verticesZ[vertex] - centerZ) <= ANIMATED_HEAD_CENTER_LIMIT)
 			{
 				centralY[centralCount++] = verticesY[vertex];
 			}
@@ -811,8 +878,7 @@ class FaceSwapOverlay extends Overlay
 
 	private Area getProjectedMaskHeadOcclusion(
 		ModelProjection projection,
-		Actor player,
-		int renderOffsetY)
+		Actor player)
 	{
 		MaskHeadBinding binding = maskHeadBindings.get(player);
 		if (binding == null)
@@ -826,7 +892,7 @@ class FaceSwapOverlay extends Overlay
 			Point point = projection.getPoint(vertex);
 			if (point != null)
 			{
-				points.add(new java.awt.Point(point.getX(), point.getY() + renderOffsetY));
+				points.add(new java.awt.Point(point.getX(), point.getY()));
 			}
 		}
 		return points.size() < 3
@@ -2334,6 +2400,16 @@ class FaceSwapOverlay extends Overlay
 		return Math.max(0.25, Math.min(2.5, projectedHeight / 72.0));
 	}
 
+	static int resolveMaskCalibration(int configuredValue, int profileValue)
+	{
+		return configuredValue == 0 ? profileValue : configuredValue;
+	}
+
+	static int resolveMaskPitchCalibration(int configuredValue, int profileValue)
+	{
+		return profileValue != 0 && configuredValue == 20 ? profileValue : configuredValue;
+	}
+
 	private FaceSwapHeadDirection getHeadDirection(Actor player)
 	{
 		int cameraOrientation = (client.getCameraYaw() >> 3) & 2047;
@@ -2503,6 +2579,7 @@ class FaceSwapOverlay extends Overlay
 		private final int headItemId;
 		private final int appearanceFingerprint;
 		private final int[] vertexIndices;
+		private final int[] trackingIndices;
 		private final int maximumVertexIndex;
 		private final float baselineX;
 		private final float baselineY;
@@ -2529,8 +2606,9 @@ class FaceSwapOverlay extends Overlay
 			this.headItemId = headItemId;
 			this.appearanceFingerprint = appearanceFingerprint;
 			this.vertexIndices = vertexIndices;
+			this.trackingIndices = selectUpperTrackingIndices(vertexIndices, verticesY);
 			this.maximumVertexIndex = Arrays.stream(vertexIndices).max().orElse(-1);
-			MaskVector baseline = getCenter(vertexIndices, verticesX, verticesY, verticesZ);
+			MaskVector baseline = getCenter(trackingIndices, verticesX, verticesY, verticesZ);
 			this.baselineX = baseline.x;
 			this.baselineY = baseline.y;
 			this.baselineZ = baseline.z;
@@ -2569,7 +2647,7 @@ class FaceSwapOverlay extends Overlay
 			float[] verticesZ,
 			float configuredCenterY)
 		{
-			MaskVector center = getCenter(vertexIndices, verticesX, verticesY, verticesZ);
+			MaskVector center = getCenter(trackingIndices, verticesX, verticesY, verticesZ);
 			return createPose(verticesX, verticesY, verticesZ,
 				center.x - baselineX,
 				configuredCenterY + center.y - baselineY,
@@ -2582,7 +2660,7 @@ class FaceSwapOverlay extends Overlay
 			float[] verticesZ,
 			float configuredCenterY)
 		{
-			MaskVector center = getCenter(vertexIndices, verticesX, verticesY, verticesZ);
+			MaskVector center = getCenter(trackingIndices, verticesX, verticesY, verticesZ);
 			return createPose(verticesX, verticesY, verticesZ, center.x, center.y, center.z);
 		}
 
@@ -2654,6 +2732,42 @@ class FaceSwapOverlay extends Overlay
 			}
 			return selected;
 		}
+
+		private static int[] selectUpperTrackingIndices(int[] indices, float[] verticesY)
+		{
+			float minimumY = Float.POSITIVE_INFINITY;
+			float maximumY = Float.NEGATIVE_INFINITY;
+			for (int index : indices)
+			{
+				minimumY = Math.min(minimumY, verticesY[index]);
+				maximumY = Math.max(maximumY, verticesY[index]);
+			}
+
+			float cutoffY = minimumY + (maximumY - minimumY) * 0.45f;
+			int count = 0;
+			for (int index : indices)
+			{
+				if (verticesY[index] <= cutoffY)
+				{
+					count++;
+				}
+			}
+			if (count < 6)
+			{
+				return indices;
+			}
+
+			int[] selected = new int[count];
+			int destination = 0;
+			for (int index : indices)
+			{
+				if (verticesY[index] <= cutoffY)
+				{
+					selected[destination++] = index;
+				}
+			}
+			return selected;
+		}
 	}
 
 	private static final class MaskHeadPose
@@ -2719,6 +2833,54 @@ class FaceSwapOverlay extends Overlay
 			return new MaskHeadPose(
 				centerX, centerY, centerZ,
 				MaskVector.X_AXIS, MaskVector.Y_AXIS, MaskVector.Z_AXIS);
+		}
+
+		private MaskHeadPose withPitchDegrees(float degrees)
+		{
+			double radians = Math.toRadians(degrees);
+			float sine = (float) Math.sin(radians);
+			float cosine = (float) Math.cos(radians);
+			MaskVector pitchedY = new MaskVector(
+				yAxis.x * cosine + zAxis.x * sine,
+				yAxis.y * cosine + zAxis.y * sine,
+				yAxis.z * cosine + zAxis.z * sine).normalize(yAxis);
+			MaskVector pitchedZ = new MaskVector(
+				zAxis.x * cosine - yAxis.x * sine,
+				zAxis.y * cosine - yAxis.y * sine,
+				zAxis.z * cosine - yAxis.z * sine).normalize(zAxis);
+			return new MaskHeadPose(centerX, centerY, centerZ, xAxis, pitchedY, pitchedZ);
+		}
+
+		private MaskHeadPose withYawDegrees(float degrees)
+		{
+			double radians = Math.toRadians(degrees);
+			float sine = (float) Math.sin(radians);
+			float cosine = (float) Math.cos(radians);
+			MaskVector yawedX = new MaskVector(
+				xAxis.x * cosine - zAxis.x * sine,
+				xAxis.y * cosine - zAxis.y * sine,
+				xAxis.z * cosine - zAxis.z * sine).normalize(xAxis);
+			MaskVector yawedZ = new MaskVector(
+				xAxis.x * sine + zAxis.x * cosine,
+				xAxis.y * sine + zAxis.y * cosine,
+				xAxis.z * sine + zAxis.z * cosine).normalize(zAxis);
+			return new MaskHeadPose(centerX, centerY, centerZ, yawedX, yAxis, yawedZ);
+		}
+
+		private MaskHeadPose withRollDegrees(float degrees)
+		{
+			double radians = Math.toRadians(degrees);
+			float sine = (float) Math.sin(radians);
+			float cosine = (float) Math.cos(radians);
+			MaskVector rolledX = new MaskVector(
+				xAxis.x * cosine + yAxis.x * sine,
+				xAxis.y * cosine + yAxis.y * sine,
+				xAxis.z * cosine + yAxis.z * sine).normalize(xAxis);
+			MaskVector rolledY = new MaskVector(
+				yAxis.x * cosine - xAxis.x * sine,
+				yAxis.y * cosine - xAxis.y * sine,
+				yAxis.z * cosine - xAxis.z * sine).normalize(yAxis);
+			return new MaskHeadPose(centerX, centerY, centerZ, rolledX, rolledY, zAxis);
 		}
 
 		private MaskVector transform(float x, float y, float z)

@@ -15,6 +15,9 @@ final class HelmetProfile
 	private final int modelDepth;
 	private final int animationFrameOffset;
 	private final int maskY;
+	private final int maskPitch;
+	private final int maskYaw;
+	private final int maskRoll;
 	private final boolean tested;
 	private final boolean hidden;
 
@@ -32,6 +35,9 @@ final class HelmetProfile
 		int modelDepth,
 		int animationFrameOffset,
 		int maskY,
+		int maskPitch,
+		int maskYaw,
+		int maskRoll,
 		boolean tested,
 		boolean hidden)
 	{
@@ -48,6 +54,9 @@ final class HelmetProfile
 		this.modelDepth = modelDepth;
 		this.animationFrameOffset = animationFrameOffset;
 		this.maskY = maskY;
+		this.maskPitch = maskPitch;
+		this.maskYaw = maskYaw;
+		this.maskRoll = maskRoll;
 		this.tested = tested;
 		this.hidden = hidden;
 	}
@@ -115,6 +124,21 @@ final class HelmetProfile
 	int getMaskY()
 	{
 		return maskY;
+	}
+
+	int getMaskPitch()
+	{
+		return maskPitch;
+	}
+
+	int getMaskYaw()
+	{
+		return maskYaw;
+	}
+
+	int getMaskRoll()
+	{
+		return maskRoll;
 	}
 
 	boolean isTested()

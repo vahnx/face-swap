@@ -15,7 +15,7 @@ import java.util.Map;
 final class HelmetProfiles
 {
 	static final String RESOURCE = "/helmet_profiles.csv";
-	static final String HEADER = "item_ids,item_name,model_y,model_scale,model_x,model_z,model_pitch,model_yaw,model_roll,model_width,model_face_height,model_depth,animation_frame_offset,mask_y,status,notes";
+	static final String HEADER = "item_ids,item_name,model_y,model_scale,model_x,model_z,model_pitch,model_yaw,model_roll,model_width,model_face_height,model_depth,animation_frame_offset,mask_y,mask_pitch,mask_yaw,mask_roll,status,notes";
 	private static final LoadedProfiles PROFILES = load();
 
 	private HelmetProfiles()
@@ -61,9 +61,9 @@ final class HelmetProfiles
 				}
 
 				String[] values = line.split(",", -1);
-				if (values.length != 16)
+				if (values.length != 19)
 				{
-					throw new IllegalStateException("Expected 16 helmet profile fields on line " + lineNumber);
+					throw new IllegalStateException("Expected 19 helmet profile fields on line " + lineNumber);
 				}
 
 				HelmetProfile profile = new HelmetProfile(
@@ -80,8 +80,11 @@ final class HelmetProfiles
 					parseInt(values[11], lineNumber),
 					parseInt(values[12], lineNumber),
 					parseInt(values[13], lineNumber),
-					"tested".equalsIgnoreCase(values[14]),
-					"hidden".equalsIgnoreCase(values[14]));
+					parseInt(values[14], lineNumber),
+					parseInt(values[15], lineNumber),
+					parseInt(values[16], lineNumber),
+					"tested".equalsIgnoreCase(values[17]),
+					"hidden".equalsIgnoreCase(values[17]));
 				profiles.add(profile);
 
 				for (String itemIdValue : values[0].split(";"))

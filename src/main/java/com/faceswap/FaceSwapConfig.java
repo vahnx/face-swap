@@ -623,6 +623,54 @@ public interface FaceSwapConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "maskAngle",
+		name = "Mask Pitch",
+		description = "Additional rotation around the local X axis. Positive values tilt the mask downward.",
+		position = 7,
+		section = FACE_MASK_SECTION
+	)
+	@Range(
+		min = -45,
+		max = 45
+	)
+	default int maskAngle()
+	{
+		return 20;
+	}
+
+	@ConfigItem(
+		keyName = "maskYaw",
+		name = "Mask Yaw",
+		description = "Additional rotation around the local Y axis. Use this to turn the mask left or right.",
+		position = 8,
+		section = FACE_MASK_SECTION
+	)
+	@Range(
+		min = -45,
+		max = 45
+	)
+	default int maskYaw()
+	{
+		return 0;
+	}
+
+	@ConfigItem(
+		keyName = "maskRoll",
+		name = "Mask Roll",
+		description = "Additional rotation around the local Z axis. Use this to spin the mask clockwise or counterclockwise.",
+		position = 9,
+		section = FACE_MASK_SECTION
+	)
+	@Range(
+		min = -45,
+		max = 45
+	)
+	default int maskRoll()
+	{
+		return 0;
+	}
+
+	@ConfigItem(
 		keyName = "prototype3dEnabled",
 		name = "Enable 3D Prototype",
 		description = "Replaces the PNG overlay with a cache-backed 3D test model attached to your player.",

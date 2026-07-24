@@ -28,6 +28,12 @@ public class HelmetProfilesTest
 		assertTrue(profile.isTested());
 		assertFalse(HelmetProfiles.find(ItemID.ARMADYL_HELMET).isHidden());
 		assertFalse(HelmetProfiles.find(ItemID.CRYSTAL_HELM).isHidden());
+		assertEquals(25, HelmetProfiles.find(ItemID.CRYSTAL_HELM).getMaskPitch());
+		assertEquals(19, HelmetProfiles.find(ItemID.CRYSTAL_HELM).getMaskYaw());
+		assertEquals(20, HelmetProfiles.find(ItemID.VOID_MAGE_HELM).getMaskPitch());
+		assertEquals(20, HelmetProfiles.find(ItemID.BERSERKER_HELM).getMaskYaw());
+		assertEquals(20, HelmetProfiles.find(ItemID.SERPENTINE_HELM).getMaskPitch());
+		assertEquals(36, HelmetProfiles.find(ItemID.SERPENTINE_HELM).getMaskYaw());
 		assertFalse(HelmetProfiles.find(ItemID.ZOMBIE_HELMET).isHidden());
 		assertEquals(-5, HelmetProfiles.find(ItemID.LUMBERJACK_HAT).getMaskY());
 		assertEquals(6, HelmetProfiles.find(ItemID.NEITIZNOT_FACEGUARD).getMaskY());

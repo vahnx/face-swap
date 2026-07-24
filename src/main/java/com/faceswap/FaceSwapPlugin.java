@@ -815,7 +815,14 @@ public class FaceSwapPlugin extends Plugin
 			String[] existingValues = row < 0 ? null : lines.get(row).split(",", -1);
 			String itemIds = row < 0 ? Integer.toString(itemId) : existingValues[0];
 			String maskY = row < 0 ? "0" : existingValues[13];
-			String profile = buildHelmetProfileRow(itemIds, itemName, maskY);
+			String maskPitch = resolveSavedMaskCalibration(
+				config.maskAngle(), row < 0 ? "0" : existingValues[14]);
+			String maskYaw = resolveSavedMaskCalibration(
+				config.maskYaw(), row < 0 ? "0" : existingValues[15]);
+			String maskRoll = resolveSavedMaskCalibration(
+				config.maskRoll(), row < 0 ? "0" : existingValues[16]);
+			String profile = buildHelmetProfileRow(
+				itemIds, itemName, maskY, maskPitch, maskYaw, maskRoll);
 			if (row < 0)
 			{
 				lines.add(profile);
@@ -846,7 +853,7 @@ public class FaceSwapPlugin extends Plugin
 				continue;
 			}
 			String[] values = line.split(",", -1);
-			if (values.length == 16 && Arrays.asList(values[0].split(";")).contains(target))
+			if (values.length == 19 && Arrays.asList(values[0].split(";")).contains(target))
 			{
 				return row;
 			}
@@ -854,7 +861,18 @@ public class FaceSwapPlugin extends Plugin
 		return -1;
 	}
 
-	private String buildHelmetProfileRow(String itemIds, String itemName, String maskY)
+	private static String resolveSavedMaskCalibration(int configuredValue, String existingValue)
+	{
+		return configuredValue == 0 ? existingValue : Integer.toString(configuredValue);
+	}
+
+	private String buildHelmetProfileRow(
+		String itemIds,
+		String itemName,
+		String maskY,
+		String maskPitch,
+		String maskYaw,
+		String maskRoll)
 	{
 		return String.join(",",
 			itemIds,
@@ -871,6 +889,9 @@ public class FaceSwapPlugin extends Plugin
 			Integer.toString(config.prototype3dDepth()),
 			Integer.toString(config.prototypeAnimationFrameOffset()),
 			maskY,
+			maskPitch,
+			maskYaw,
+			maskRoll,
 			"tested",
 			"Saved from live config on " + LocalDate.now());
 	}
@@ -1697,6 +1718,21 @@ public class FaceSwapPlugin extends Plugin
 			return 10;
 		}
 		return clamp(configuredY, -100, 100);
+	}
+
+	int getMaskPitch()
+	{
+		return clamp(config.maskAngle(), -45, 45);
+	}
+
+	int getMaskYaw()
+	{
+		return clamp(config.maskYaw(), -45, 45);
+	}
+
+	int getMaskRoll()
+	{
+		return clamp(config.maskRoll(), -45, 45);
 	}
 
 	boolean isDebugProjection()

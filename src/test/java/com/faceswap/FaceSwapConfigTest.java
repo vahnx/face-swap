@@ -49,6 +49,9 @@ public class FaceSwapConfigTest
 		assertEquals(0, config.maskForwardOffset());
 		assertEquals(28, config.maskBacking());
 		assertEquals(20, config.yOffset());
+		assertEquals(20, config.maskAngle());
+		assertEquals(0, config.maskYaw());
+		assertEquals(0, config.maskRoll());
 		assertEquals(12, config.prototype3dGlobalYShift());
 		assertEquals(7, config.prototype3dY());
 		assertEquals(100, config.prototype3dScale());
@@ -84,6 +87,9 @@ public class FaceSwapConfigTest
 		assertTrue(visibleKeys.contains("saveHelmetPreset"));
 		assertTrue(visibleKeys.contains("debugProjection"));
 		assertTrue(visibleKeys.contains("maskBacking"));
+		assertTrue(visibleKeys.contains("maskAngle"));
+		assertTrue(visibleKeys.contains("maskYaw"));
+		assertTrue(visibleKeys.contains("maskRoll"));
 		assertTrue(visibleKeys.size() > 40);
 	}
 

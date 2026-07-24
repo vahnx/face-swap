@@ -99,7 +99,7 @@ class FaceSwapPanel extends PluginPanel
 
 		JPanel content = columnPanel();
 
-		JPanel headSection = sectionPanel("Pick a Character or Target");
+		JPanel headSection = sectionPanel("Pick a Character and Target");
 		selectedHeadPreview.setPreferredSize(new Dimension(96, 96));
 		selectedHeadPreview.setHorizontalAlignment(SwingConstants.CENTER);
 		selectedHeadPreview.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
@@ -538,8 +538,12 @@ class FaceSwapPanel extends PluginPanel
 
 	private static JScrollPane headPickerScrollPane(JPanel grid)
 	{
+		JPanel viewportContent = new JPanel(new BorderLayout());
+		viewportContent.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		viewportContent.add(grid, BorderLayout.NORTH);
+
 		JScrollPane scrollPane = new JScrollPane(
-			grid,
+			viewportContent,
 			JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
 			JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		scrollPane.setPreferredSize(new Dimension(300, 360));

@@ -25,6 +25,12 @@ This repository is a RuneLite external plugin that renders approved creator face
 - Sidepanel-managed settings may be persisted as hidden config items.
 - Calibration settings may remain visible in RuneLite config if they are useful for testing.
 
+## Mask Tracking
+
+- Preserve the current merged-player-model mask tracker as a legacy fallback when implementing equipment-independent or rig-based tracking.
+- Do not remove the fallback until the replacement has been verified across normal movement, zoom levels, equipment changes, and representative emotes.
+- Follow `docs/mask-tracking.md` for the current behavior, known limitations, and migration requirements.
+
 ## Assets
 
 - Never name a sidepanel or runtime classpath icon `icon.png`. Generic classpath resource names can collide with other plugins and display the wrong icon; use a plugin-specific name such as `face_swap_icon.png`. This does not prohibit RuneLite's repository-root `icon.png` used for the Plugin Hub listing.

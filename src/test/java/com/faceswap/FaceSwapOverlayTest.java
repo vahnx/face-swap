@@ -2,27 +2,28 @@ package com.faceswap;
 
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class FaceSwapOverlayTest
 {
 	@Test
-	public void nonzeroDebugCalibrationOverridesHelmetProfile()
+	public void detectsRaspberryAnimationIds()
 	{
-		assertEquals(20, FaceSwapOverlay.resolveMaskCalibration(0, 20));
-		assertEquals(12, FaceSwapOverlay.resolveMaskCalibration(12, 20));
-		assertEquals(25, FaceSwapOverlay.resolveMaskPitchCalibration(0, 25));
-		assertEquals(12, FaceSwapOverlay.resolveMaskPitchCalibration(12, 25));
+		assertTrue(FaceSwapOverlay.isRaspberryAnimation(
+			net.runelite.api.gameval.AnimationID.EMOTE_YA_BOO_SUCKS));
+		assertTrue(FaceSwapOverlay.isRaspberryAnimation(
+			net.runelite.api.gameval.AnimationID.EMOTE_YA_BOO_SUCKS_LOOP));
+		assertFalse(FaceSwapOverlay.isRaspberryAnimation(
+			net.runelite.api.gameval.AnimationID.EMOTE_WAVE));
 	}
 
 	@Test
-	public void helmetCalibrationIsReservedForMergedModelTracking()
+	public void detectsBunnyHopAnimationId()
 	{
-		assertFalse(FaceSwapOverlay.usesLegacyHelmetMaskCalibration(MaskTrackingMode.ANIMATED_RIG, true));
-		assertFalse(FaceSwapOverlay.usesLegacyHelmetMaskCalibration(MaskTrackingMode.AUTO, true));
-		assertTrue(FaceSwapOverlay.usesLegacyHelmetMaskCalibration(MaskTrackingMode.MERGED_MODEL, true));
-		assertTrue(FaceSwapOverlay.usesLegacyHelmetMaskCalibration(MaskTrackingMode.AUTO, false));
+		assertTrue(FaceSwapOverlay.isBunnyHopAnimation(
+			net.runelite.api.gameval.AnimationID.RABBIT_EMOTE));
+		assertFalse(FaceSwapOverlay.isBunnyHopAnimation(
+			net.runelite.api.gameval.AnimationID.EMOTE_JUMP_WITH_JOY));
 	}
 }

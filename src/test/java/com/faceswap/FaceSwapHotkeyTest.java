@@ -2,6 +2,7 @@ package com.faceswap;
 
 import java.awt.Canvas;
 import java.awt.event.KeyEvent;
+import net.runelite.api.GameState;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
@@ -17,8 +18,8 @@ public class FaceSwapHotkeyTest
 
 		KeyEvent event = keyEvent(KeyEvent.VK_ESCAPE);
 
-		assertTrue(plugin.handleKeyPressed(event));
-		assertFalse(plugin.handleKeyPressed(event));
+		assertTrue(plugin.handleKeyPressed(GameState.LOGGED_IN, event));
+		assertFalse(plugin.handleKeyPressed(GameState.LOGGED_IN, event));
 	}
 
 	@Test
@@ -26,8 +27,18 @@ public class FaceSwapHotkeyTest
 	{
 		FaceSwapPlugin plugin = new FaceSwapPlugin();
 
-		assertFalse(plugin.handleKeyPressed(keyEvent(KeyEvent.VK_ESCAPE)));
-		assertFalse(plugin.handleKeyPressed(keyEvent(KeyEvent.VK_ENTER)));
+		assertFalse(plugin.handleKeyPressed(GameState.LOGGED_IN, keyEvent(KeyEvent.VK_ESCAPE)));
+		assertFalse(plugin.handleKeyPressed(GameState.LOGGED_IN, keyEvent(KeyEvent.VK_ENTER)));
+	}
+
+	@Test
+	public void escapePassesThroughOutsideTheLoggedInGame()
+	{
+		FaceSwapPlugin plugin = new FaceSwapPlugin();
+		plugin.setPickPlayerMode(true);
+
+		assertFalse(plugin.handleKeyPressed(GameState.LOGIN_SCREEN, keyEvent(KeyEvent.VK_ESCAPE)));
+		assertTrue(plugin.handleKeyPressed(GameState.LOGGED_IN, keyEvent(KeyEvent.VK_ESCAPE)));
 	}
 
 	@Test

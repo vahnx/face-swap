@@ -54,7 +54,7 @@ public class FaceSwapConfigTest
 		assertEquals(0, config.maskYaw());
 		assertEquals(0, config.maskRoll());
 		assertEquals(12, config.prototype3dGlobalYShift());
-		assertEquals(7, config.prototype3dY());
+		assertEquals(10, config.prototype3dY());
 		assertEquals(100, config.prototype3dScale());
 		assertEquals(0, config.prototype3dX());
 		assertEquals(-9, config.prototype3dZ());

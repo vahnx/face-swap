@@ -2160,6 +2160,9 @@ public class FaceSwapPlugin extends Plugin
 		boolean matches;
 		switch (scope)
 		{
+			case DISABLED:
+				matches = false;
+				break;
 			case SELF:
 				matches = player == localPlayer;
 				break;
@@ -2741,7 +2744,13 @@ public class FaceSwapPlugin extends Plugin
 
 	boolean handleKeyPressed(KeyEvent event)
 	{
-		return event != null
+		return client != null && handleKeyPressed(client.getGameState(), event);
+	}
+
+	boolean handleKeyPressed(GameState gameState, KeyEvent event)
+	{
+		return gameState == GameState.LOGGED_IN
+			&& event != null
 			&& event.getKeyCode() == KeyEvent.VK_ESCAPE
 			&& handleEscapePressed();
 	}

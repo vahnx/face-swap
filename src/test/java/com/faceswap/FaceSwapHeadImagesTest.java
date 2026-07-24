@@ -40,6 +40,10 @@ public class FaceSwapHeadImagesTest
 	{
 		FaceSwapHead[] approvedHeads = {
 			FaceSwapHead.SARDACO,
+			FaceSwapHead.FAUX_OSRS,
+			FaceSwapHead.GRIM,
+			FaceSwapHead.KING_CONDOR,
+			FaceSwapHead.ALFIE,
 			FaceSwapHead.DEARLOLA,
 			FaceSwapHead.BEGGAR,
 			FaceSwapHead.TPAPASLICE,

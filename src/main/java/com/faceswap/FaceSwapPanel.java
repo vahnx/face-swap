@@ -10,6 +10,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.FocusAdapter;
@@ -18,9 +19,15 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Hashtable;
+import java.util.List;
+import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
+import javax.swing.ButtonGroup;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -50,13 +57,23 @@ class FaceSwapPanel extends PluginPanel
 	private static final Dimension VALUE_FIELD_DIMENSION = new Dimension(44, 24);
 	private static final int PICKER_THUMBNAIL_SIZE = 96;
 	private static final int PICKER_LABEL_HEIGHT = 20;
+	private static final int MODE_THUMBNAIL_WIDTH = 56;
+	private static final int MODE_ARTWORK_HEIGHT = 54;
+	private static final int MODE_LABEL_HEIGHT = 18;
 	private static final ImageIcon TARGET_PICK_ICON = new ImageIcon(createTargetPickerThumbnail(false));
 	private static final ImageIcon TARGET_PICK_ACTIVE_ICON = new ImageIcon(createTargetPickerThumbnail(true));
+	private static final ImageIcon THREE_D_MODE_ICON =
+		new ImageIcon(createModeThumbnail("/mode_icons/mode_3d.png", FaceSwapRenderMode.THREE_D));
+	private static final ImageIcon MASK_MODE_ICON =
+		new ImageIcon(createModeThumbnail("/mode_icons/mode_mask.png", FaceSwapRenderMode.MASK));
+	private static final ImageIcon WRAPAROUND_MODE_ICON =
+		new ImageIcon(createModeThumbnail("/mode_icons/mode_wraparound.png", FaceSwapRenderMode.TWO_D));
 
 	private final FaceSwapPlugin plugin;
 	private final JButton selectedHeadPreview = new JButton();
 	private final JComboBox<FaceSwapTargetScope> targetScopeBox = new JComboBox<>(new FaceSwapTargetScope[]
 	{
+		FaceSwapTargetScope.DISABLED,
 		FaceSwapTargetScope.SELF,
 		FaceSwapTargetScope.FRIENDS,
 		FaceSwapTargetScope.CHAT_CHANNEL,
@@ -68,7 +85,9 @@ class FaceSwapPanel extends PluginPanel
 	});
 	private final JComboBox<FaceSwapNpcTargetScope> npcTargetScopeBox =
 		new JComboBox<>(FaceSwapNpcTargetScope.values());
-	private final JComboBox<FaceSwapRenderMode> renderModeBox = new JComboBox<>(FaceSwapRenderMode.values());
+	private final JToggleButton threeDModeButton = new JToggleButton(THREE_D_MODE_ICON);
+	private final JToggleButton maskModeButton = new JToggleButton(MASK_MODE_ICON);
+	private final JToggleButton wraparoundModeButton = new JToggleButton(WRAPAROUND_MODE_ICON);
 	private final JSlider qualitySlider = new JSlider(0, 4, 1);
 	private final JLabel qualityLabel = new JLabel("Quality");
 	private final JPanel qualityControls = columnPanel();
@@ -119,14 +138,18 @@ class FaceSwapPanel extends PluginPanel
 		headPickerRow.add(selectedHeadPreview);
 		headPickerRow.add(pickPlayerButton);
 		headSection.add(fullWidthRow(headPickerRow));
-		renderModeBox.addActionListener(e ->
-		{
-			if (!refreshing)
-			{
-				plugin.setRenderMode((FaceSwapRenderMode) renderModeBox.getSelectedItem());
-			}
-		});
-		headSection.add(row("Style", renderModeBox));
+
+		ButtonGroup renderModeGroup = new ButtonGroup();
+		configureModeButton(threeDModeButton, FaceSwapRenderMode.THREE_D, renderModeGroup);
+		configureModeButton(maskModeButton, FaceSwapRenderMode.MASK, renderModeGroup);
+		configureModeButton(wraparoundModeButton, FaceSwapRenderMode.TWO_D, renderModeGroup);
+		JPanel renderModeRow = new JPanel(new GridLayout(1, 3, 4, 0));
+		renderModeRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		renderModeRow.add(threeDModeButton);
+		renderModeRow.add(maskModeButton);
+		renderModeRow.add(wraparoundModeButton);
+		headSection.add(fullWidthRow(renderModeRow));
+
 		qualityLabel.setForeground(Color.WHITE);
 		qualityControls.add(labelRow(qualityLabel));
 		qualitySlider.setMajorTickSpacing(1);
@@ -310,7 +333,7 @@ class FaceSwapPanel extends PluginPanel
 		{
 			selectedHeadPreview.setIcon(new ImageIcon(createPickerThumbnail(state.selectedHead)));
 			selectedHeadPreview.setToolTipText(state.selectedHead.toString());
-			renderModeBox.setSelectedItem(state.renderMode);
+			updateModeButtons(state.renderMode);
 			qualitySlider.setValue(state.qualityLevel);
 			qualityControls.setVisible(state.renderMode == FaceSwapRenderMode.THREE_D);
 			dkModeCheck.setSelected(state.dkMode);
@@ -362,6 +385,44 @@ class FaceSwapPanel extends PluginPanel
 		}
 		revalidate();
 		repaint();
+	}
+
+	private void configureModeButton(
+		JToggleButton button,
+		FaceSwapRenderMode renderMode,
+		ButtonGroup buttonGroup)
+	{
+		buttonGroup.add(button);
+		button.setMargin(new Insets(0, 0, 0, 0));
+		button.setFocusPainted(false);
+		button.setContentAreaFilled(true);
+		button.setOpaque(true);
+		button.setToolTipText("Use " + renderMode + " style");
+		button.getAccessibleContext().setAccessibleName(renderMode + " style");
+		button.addActionListener(e ->
+		{
+			if (!refreshing)
+			{
+				updateModeButtons(renderMode);
+				plugin.setRenderMode(renderMode);
+			}
+		});
+	}
+
+	private void updateModeButtons(FaceSwapRenderMode selectedMode)
+	{
+		updateModeButton(threeDModeButton, selectedMode == FaceSwapRenderMode.THREE_D);
+		updateModeButton(maskModeButton, selectedMode == FaceSwapRenderMode.MASK);
+		updateModeButton(wraparoundModeButton, selectedMode == FaceSwapRenderMode.TWO_D);
+	}
+
+	private static void updateModeButton(JToggleButton button, boolean selected)
+	{
+		button.setSelected(selected);
+		button.setBackground(selected ? new Color(82, 63, 20) : ColorScheme.DARKER_GRAY_COLOR);
+		button.setBorder(BorderFactory.createLineBorder(
+			selected ? ColorScheme.BRAND_ORANGE : ColorScheme.MEDIUM_GRAY_COLOR,
+			selected ? 3 : 1));
 	}
 
 	void disposePanel()
@@ -507,7 +568,7 @@ class FaceSwapPanel extends PluginPanel
 			BorderFactory.createEmptyBorder(8, 8, 8, 8)));
 
 		int availableHeads = 0;
-		for (FaceSwapHead head : FaceSwapHead.values())
+		for (FaceSwapHead head : orderedHeadsForPicker(category))
 		{
 			if (head.getCategory() != category || !plugin.isHeadAvailable(head))
 			{
@@ -534,6 +595,60 @@ class FaceSwapPanel extends PluginPanel
 			grid.add(emptyLabel);
 		}
 		return grid;
+	}
+
+	static List<FaceSwapHead> orderedHeadsForPicker(FaceSwapHeadCategory category)
+	{
+		List<FaceSwapHead> ordered = new ArrayList<>();
+		if (category == FaceSwapHeadCategory.CONTENT_CREATOR)
+		{
+			addAll(ordered,
+				FaceSwapHead.ODABLOCK,
+				FaceSwapHead.FAUX_OSRS,
+				FaceSwapHead.FAUX,
+				FaceSwapHead.ALFIE,
+				FaceSwapHead.SARDACO,
+				FaceSwapHead.KING_CONDOR,
+				FaceSwapHead.DEARLOLA,
+				FaceSwapHead.PRISONJOE,
+				FaceSwapHead.TPAPASLICE,
+				FaceSwapHead.ZECOOKIES,
+				FaceSwapHead.BEGGAR,
+				FaceSwapHead.GRIM,
+				FaceSwapHead.TORVESTA,
+				FaceSwapHead.PURESPAM);
+		}
+		else if (category == FaceSwapHeadCategory.FICTIONAL_CHARACTER)
+		{
+			addAll(ordered,
+				FaceSwapHead.ORANGE_PARKA,
+				FaceSwapHead.CLASSIC_ADVENTURER,
+				FaceSwapHead.PURPLE_DINOSAUR,
+				FaceSwapHead.SPACE_MARINE,
+				FaceSwapHead.HALFLING,
+				FaceSwapHead.BANDICOOT,
+				FaceSwapHead.AGENT,
+				FaceSwapHead.MONKEY,
+				FaceSwapHead.CHOSEN_ONE,
+				FaceSwapHead.MARTIAL_ARTIST);
+		}
+
+		for (FaceSwapHead head : FaceSwapHead.values())
+		{
+			if (head.getCategory() == category && !ordered.contains(head))
+			{
+				ordered.add(head);
+			}
+		}
+		return ordered;
+	}
+
+	private static void addAll(List<FaceSwapHead> heads, FaceSwapHead... entries)
+	{
+		for (FaceSwapHead entry : entries)
+		{
+			heads.add(entry);
+		}
 	}
 
 	private static JScrollPane headPickerScrollPane(JPanel grid)
@@ -623,7 +738,7 @@ class FaceSwapPanel extends PluginPanel
 		return label;
 	}
 
-	private static BufferedImage createPickerThumbnail(FaceSwapHead head)
+	static BufferedImage createPickerThumbnail(FaceSwapHead head)
 	{
 		BufferedImage source = FaceSwapHeadImages.get(head, FaceSwapHeadDirection.FRONT);
 		BufferedImage thumbnail = new BufferedImage(
@@ -642,28 +757,38 @@ class FaceSwapPanel extends PluginPanel
 			int y = (PICKER_THUMBNAIL_SIZE - height) / 2;
 			graphics.drawImage(source, x, y, width, height, null);
 
-			int labelY = PICKER_THUMBNAIL_SIZE - PICKER_LABEL_HEIGHT;
-			graphics.setColor(Color.BLACK);
-			graphics.fillRect(0, labelY, PICKER_THUMBNAIL_SIZE, PICKER_LABEL_HEIGHT);
-			Font font = new Font(Font.SANS_SERIF, Font.BOLD, 12);
-			graphics.setFont(font);
-			FontMetrics metrics = graphics.getFontMetrics();
-			while (metrics.stringWidth(head.toString()) > PICKER_THUMBNAIL_SIZE - 8 && font.getSize() > 9)
+			if (head.isDebugOnly())
 			{
-				font = font.deriveFont((float) font.getSize() - 1f);
-				graphics.setFont(font);
-				metrics = graphics.getFontMetrics();
+				drawPickerLabel(graphics, "(Demo)", 0);
 			}
-			graphics.setColor(Color.WHITE);
-			int textX = (PICKER_THUMBNAIL_SIZE - metrics.stringWidth(head.toString())) / 2;
-			int textY = labelY + (PICKER_LABEL_HEIGHT - metrics.getHeight()) / 2 + metrics.getAscent();
-			graphics.drawString(head.toString(), textX, textY);
+
+			int labelY = PICKER_THUMBNAIL_SIZE - PICKER_LABEL_HEIGHT;
+			drawPickerLabel(graphics, head.toString(), labelY);
 		}
 		finally
 		{
 			graphics.dispose();
 		}
 		return thumbnail;
+	}
+
+	private static void drawPickerLabel(Graphics2D graphics, String text, int labelY)
+	{
+		graphics.setColor(Color.BLACK);
+		graphics.fillRect(0, labelY, PICKER_THUMBNAIL_SIZE, PICKER_LABEL_HEIGHT);
+		Font font = new Font(Font.SANS_SERIF, Font.BOLD, 12);
+		graphics.setFont(font);
+		FontMetrics metrics = graphics.getFontMetrics();
+		while (metrics.stringWidth(text) > PICKER_THUMBNAIL_SIZE - 8 && font.getSize() > 9)
+		{
+			font = font.deriveFont((float) font.getSize() - 1f);
+			graphics.setFont(font);
+			metrics = graphics.getFontMetrics();
+		}
+		graphics.setColor(Color.WHITE);
+		int textX = (PICKER_THUMBNAIL_SIZE - metrics.stringWidth(text)) / 2;
+		int textY = labelY + (PICKER_LABEL_HEIGHT - metrics.getHeight()) / 2 + metrics.getAscent();
+		graphics.drawString(text, textX, textY);
 	}
 
 	private static BufferedImage createTargetPickerThumbnail(boolean active)
@@ -712,6 +837,68 @@ class FaceSwapPanel extends PluginPanel
 			graphics.dispose();
 		}
 		return thumbnail;
+	}
+
+	static BufferedImage createModeThumbnail(String resourcePath, FaceSwapRenderMode renderMode)
+	{
+		BufferedImage artwork = loadModeArtwork(resourcePath);
+		BufferedImage thumbnail = new BufferedImage(
+			MODE_THUMBNAIL_WIDTH,
+			MODE_ARTWORK_HEIGHT + MODE_LABEL_HEIGHT,
+			BufferedImage.TYPE_INT_ARGB);
+		Graphics2D graphics = thumbnail.createGraphics();
+		try
+		{
+			graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+			graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+			graphics.setColor(ColorScheme.DARKER_GRAY_COLOR);
+			graphics.fillRect(0, 0, MODE_THUMBNAIL_WIDTH, MODE_ARTWORK_HEIGHT);
+			graphics.drawImage(artwork, 1, 0, MODE_THUMBNAIL_WIDTH - 2, MODE_ARTWORK_HEIGHT, null);
+
+			graphics.setColor(Color.BLACK);
+			graphics.fillRect(0, MODE_ARTWORK_HEIGHT, MODE_THUMBNAIL_WIDTH, MODE_LABEL_HEIGHT);
+			Font font = new Font(Font.SANS_SERIF, Font.BOLD, 10);
+			graphics.setFont(font);
+			FontMetrics metrics = graphics.getFontMetrics();
+			String label = renderMode.toString();
+			while (metrics.stringWidth(label) > MODE_THUMBNAIL_WIDTH - 4 && font.getSize() > 7)
+			{
+				font = font.deriveFont((float) font.getSize() - 1f);
+				graphics.setFont(font);
+				metrics = graphics.getFontMetrics();
+			}
+			graphics.setColor(Color.WHITE);
+			int textX = (MODE_THUMBNAIL_WIDTH - metrics.stringWidth(label)) / 2;
+			int textY = MODE_ARTWORK_HEIGHT
+				+ (MODE_LABEL_HEIGHT - metrics.getHeight()) / 2
+				+ metrics.getAscent();
+			graphics.drawString(label, textX, textY);
+		}
+		finally
+		{
+			graphics.dispose();
+		}
+		return thumbnail;
+	}
+
+	private static BufferedImage loadModeArtwork(String resourcePath)
+	{
+		try (InputStream input = FaceSwapPanel.class.getResourceAsStream(resourcePath))
+		{
+			if (input != null)
+			{
+				BufferedImage artwork = ImageIO.read(input);
+				if (artwork != null)
+				{
+					return artwork;
+				}
+			}
+		}
+		catch (IOException ignored)
+		{
+			// The fallback below keeps the panel usable if a packaged icon cannot be decoded.
+		}
+		return new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
 	}
 
 	private static JPanel columnPanel()

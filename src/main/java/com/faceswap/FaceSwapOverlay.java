@@ -65,6 +65,11 @@ class FaceSwapOverlay extends Overlay
 	private static final int HELMET_OCCLUSION_EXPANSION = 1;
 	private static final double WRAP_LIFT_REFERENCE_PROJECTED_HEIGHT = 420d;
 	private static final int NO_APPEARANCE_FINGERPRINT = Integer.MIN_VALUE;
+	private static final Color TONGUE_FILL = new Color(226, 84, 116, 235);
+	private static final Color TONGUE_OUTLINE = new Color(118, 25, 49, 235);
+	private static final Color INNER_EAR_FILL = new Color(255, 180, 208, 235);
+	private static final Color OUTER_EAR_FILL = new Color(248, 248, 248, 235);
+	private static final Color EAR_OUTLINE = new Color(46, 46, 46, 235);
 
 	private final Client client;
 	private final FaceSwapPlugin plugin;
@@ -118,6 +123,7 @@ class FaceSwapOverlay extends Overlay
 			}
 			if (renderMode == FaceSwapRenderMode.TWO_D && renderProjectedHeadTriangles(graphics, player, assignedHead))
 			{
+				renderEmoteAccessories(graphics, player);
 				if (plugin.isDebugProjection())
 				{
 					renderProjectionDebug(graphics, player);
@@ -133,6 +139,7 @@ class FaceSwapOverlay extends Overlay
 			FaceSwapHeadDirection direction = getHeadDirection(player);
 			BufferedImage headImage = FaceSwapHeadImages.get(assignedHead, direction);
 			renderBillboard(graphics, player, headImage);
+			renderEmoteAccessories(graphics, player);
 			if (plugin.isDebugProjection())
 			{
 				renderProjectionDebug(graphics, player);
@@ -151,10 +158,219 @@ class FaceSwapOverlay extends Overlay
 			}
 			else if (plugin.getRenderMode() == FaceSwapRenderMode.TWO_D)
 			{
-				renderProjectedHeadTriangles(graphics, npc, assignedHead);
+				if (renderProjectedHeadTriangles(graphics, npc, assignedHead))
+				{
+					renderEmoteAccessories(graphics, npc);
+				}
 			}
 		}
 		return null;
+	}
+
+	private void renderEmoteAccessories(Graphics2D graphics, Actor actor)
+	{
+		int animation = actor.getAnimation();
+		boolean raspberry = isRaspberryAnimation(animation);
+		boolean bunnyHop = isBunnyHopAnimation(animation);
+		if (!raspberry && !bunnyHop)
+		{
+			return;
+		}
+
+		Point anchor = getFaceAnchor(actor);
+		if (anchor == null)
+		{
+			return;
+		}
+
+		double offsetScale = getProjectedOffsetScale(actor);
+		int overlaySize = Math.max(12, Math.min(128, (int) Math.round(plugin.getOverlaySize() * offsetScale)));
+		FaceSwapHeadDirection direction = getHeadDirection(actor);
+		if (bunnyHop)
+		{
+			drawBunnyEars(graphics, anchor, overlaySize, direction);
+		}
+		if (raspberry && direction != FaceSwapHeadDirection.BACK)
+		{
+			drawTongue(graphics, anchor, overlaySize, direction);
+		}
+	}
+
+	private void renderMaskEmoteAccessories(
+		Graphics2D graphics,
+		Actor actor,
+		FaceSwapHeadDirection direction,
+		WorldView worldView,
+		LocalPoint localLocation,
+		int tileHeight,
+		int orientation,
+		MaskHeadPose headPose,
+		float top,
+		float bottom,
+		float frontZ,
+		Point topLeft,
+		Point topRight,
+		Point bottomLeft,
+		Point bottomRight)
+	{
+		int animation = actor.getAnimation();
+		boolean raspberry = isRaspberryAnimation(animation);
+		boolean bunnyHop = isBunnyHopAnimation(animation);
+		if (!raspberry && !bunnyHop)
+		{
+			return;
+		}
+
+		int topCenterX = (topLeft.getX() + topRight.getX()) / 2;
+		int topCenterY = (topLeft.getY() + topRight.getY()) / 2;
+		int bottomCenterX = (bottomLeft.getX() + bottomRight.getX()) / 2;
+		int bottomCenterY = (bottomLeft.getY() + bottomRight.getY()) / 2;
+		int overlaySize = Math.max(
+			12,
+			Math.max(
+				Math.max(Math.abs(topRight.getX() - topLeft.getX()), Math.abs(bottomRight.getX() - bottomLeft.getX())),
+				Math.max(Math.abs(bottomLeft.getY() - topLeft.getY()), Math.abs(bottomRight.getY() - topRight.getY()))));
+		Point earsAnchor = projectMaskVertex(
+			worldView, localLocation, tileHeight, orientation, headPose, 0f, top - (bottom - top) * 0.20f, frontZ);
+		if (earsAnchor == null)
+		{
+			earsAnchor = new Point(topCenterX, topCenterY);
+		}
+		Point tongueAnchor = projectMaskVertex(
+			worldView, localLocation, tileHeight, orientation, headPose, 0f, bottom * 0.18f, frontZ);
+		if (tongueAnchor == null)
+		{
+			tongueAnchor = new Point(
+				(topCenterX + bottomCenterX) / 2,
+				(topCenterY + bottomCenterY) / 2);
+		}
+		if (bunnyHop)
+		{
+			drawBunnyEars(graphics, earsAnchor, overlaySize, direction);
+		}
+		if (raspberry && direction != FaceSwapHeadDirection.BACK)
+		{
+			drawTongue(graphics, tongueAnchor, overlaySize, direction);
+		}
+	}
+
+	private void drawTongue(Graphics2D graphics, Point anchor, int overlaySize, FaceSwapHeadDirection direction)
+	{
+		int width = Math.max(6, overlaySize / 6);
+		int height = Math.max(10, overlaySize / 4);
+		int x = anchor.getX() - width / 2;
+		if (direction == FaceSwapHeadDirection.LEFT)
+		{
+			x -= Math.max(1, width / 4);
+		}
+		else if (direction == FaceSwapHeadDirection.RIGHT)
+		{
+			x += Math.max(1, width / 4);
+		}
+		int y = anchor.getY() + Math.max(2, overlaySize / 10);
+		int[] tongueX = {
+			x,
+			x + width,
+			x + width - Math.max(2, width / 5),
+			x + width / 2,
+			x + Math.max(2, width / 5)
+		};
+		int[] tongueY = {
+			y,
+			y,
+			y + height - Math.max(2, height / 5),
+			y + height,
+			y + height - Math.max(2, height / 5)
+		};
+		Color previousColor = graphics.getColor();
+		java.awt.Stroke previousStroke = graphics.getStroke();
+		try
+		{
+			graphics.setColor(TONGUE_FILL);
+			graphics.fillPolygon(tongueX, tongueY, tongueX.length);
+			graphics.setColor(TONGUE_OUTLINE);
+			graphics.setStroke(new BasicStroke(Math.max(1f, overlaySize / 24f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			graphics.drawPolyline(tongueX, tongueY, tongueX.length);
+			graphics.drawLine(x + width / 2, y + Math.max(2, height / 6), x + width / 2, y + height - Math.max(2, height / 5));
+		}
+		finally
+		{
+			graphics.setColor(previousColor);
+			graphics.setStroke(previousStroke);
+		}
+	}
+
+	private void drawBunnyEars(Graphics2D graphics, Point anchor, int overlaySize, FaceSwapHeadDirection direction)
+	{
+		int baseY = anchor.getY() - Math.max(10, overlaySize / 2);
+		int outerWidth = Math.max(8, overlaySize / 7);
+		int outerHeight = Math.max(20, overlaySize / 3);
+		int innerWidth = Math.max(4, outerWidth / 2);
+		int innerHeight = Math.max(10, outerHeight / 2);
+		int spacing = Math.max(4, overlaySize / 7);
+		int tilt = direction == FaceSwapHeadDirection.LEFT
+			? -Math.max(2, outerWidth / 3)
+			: direction == FaceSwapHeadDirection.RIGHT
+				? Math.max(2, outerWidth / 3)
+				: 0;
+		int leftX = anchor.getX() - spacing - outerWidth;
+		int rightX = anchor.getX() + spacing;
+		Color previousColor = graphics.getColor();
+		java.awt.Stroke previousStroke = graphics.getStroke();
+		try
+		{
+			graphics.setStroke(new BasicStroke(Math.max(1f, overlaySize / 26f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			drawSingleEar(graphics, leftX, baseY, outerWidth, outerHeight, innerWidth, innerHeight, -tilt);
+			drawSingleEar(graphics, rightX, baseY, outerWidth, outerHeight, innerWidth, innerHeight, tilt);
+		}
+		finally
+		{
+			graphics.setColor(previousColor);
+			graphics.setStroke(previousStroke);
+		}
+	}
+
+	private void drawSingleEar(
+		Graphics2D graphics,
+		int x,
+		int y,
+		int outerWidth,
+		int outerHeight,
+		int innerWidth,
+		int innerHeight,
+		int tilt)
+	{
+		int[] outerX = {
+			x + outerWidth / 2,
+			x + outerWidth + tilt,
+			x + outerWidth - Math.max(2, outerWidth / 5),
+			x + Math.max(2, outerWidth / 5)
+		};
+		int[] outerY = {
+			y,
+			y + outerHeight,
+			y + outerHeight + Math.max(2, outerHeight / 8),
+			y + outerHeight + Math.max(2, outerHeight / 8)
+		};
+		int innerXOffset = (outerWidth - innerWidth) / 2;
+		int[] innerX = {
+			x + innerXOffset + innerWidth / 2,
+			x + innerXOffset + innerWidth + tilt / 2,
+			x + innerXOffset + innerWidth - Math.max(1, innerWidth / 5),
+			x + innerXOffset + Math.max(1, innerWidth / 5)
+		};
+		int[] innerY = {
+			y + Math.max(2, outerHeight / 10),
+			y + innerHeight + Math.max(6, outerHeight / 3),
+			y + innerHeight + Math.max(8, outerHeight / 2),
+			y + innerHeight + Math.max(8, outerHeight / 2)
+		};
+		graphics.setColor(OUTER_EAR_FILL);
+		graphics.fillPolygon(outerX, outerY, outerX.length);
+		graphics.setColor(INNER_EAR_FILL);
+		graphics.fillPolygon(innerX, innerY, innerX.length);
+		graphics.setColor(EAR_OUTLINE);
+		graphics.drawPolygon(outerX, outerY, outerX.length);
 	}
 
 	private void renderPickTargetOutline(Graphics2D graphics)
@@ -323,6 +539,22 @@ class FaceSwapOverlay extends Overlay
 			bottomLeft = new Point(bottomCenterX - 2, bottomLeft.getY());
 			bottomRight = new Point(bottomCenterX + 2, bottomRight.getY());
 		}
+		renderMaskEmoteAccessories(
+			graphics,
+			player,
+			getHeadDirection(player),
+			worldView,
+			localLocation,
+			tileHeight,
+			orientation,
+			headPose,
+			top,
+			bottom,
+			frontZ,
+			topLeft,
+			topRight,
+			bottomLeft,
+			bottomRight);
 
 		float strapY = top + (bottom - top) * 0.56f;
 		float rearStrapY = strapY - (bottom - top) * 0.12f;
@@ -2561,6 +2793,17 @@ class FaceSwapOverlay extends Overlay
 			return FaceSwapHeadDirection.BACK;
 		}
 		return FaceSwapHeadDirection.RIGHT;
+	}
+
+	static boolean isRaspberryAnimation(int animationId)
+	{
+		return animationId == AnimationID.EMOTE_YA_BOO_SUCKS
+			|| animationId == AnimationID.EMOTE_YA_BOO_SUCKS_LOOP;
+	}
+
+	static boolean isBunnyHopAnimation(int animationId)
+	{
+		return animationId == AnimationID.RABBIT_EMOTE;
 	}
 
 	private static final class ModelBounds

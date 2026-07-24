@@ -778,7 +778,7 @@ public interface FaceSwapConfig extends Config
 	)
 	default int prototype3dY()
 	{
-		return 7;
+		return 10;
 	}
 
 	@ConfigItem(

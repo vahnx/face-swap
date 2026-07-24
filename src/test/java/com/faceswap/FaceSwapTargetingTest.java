@@ -25,6 +25,7 @@ public class FaceSwapTargetingTest
 	@Test
 	public void exposesAllPlayersScope()
 	{
+		assertEquals("Disabled", FaceSwapTargetScope.DISABLED.toString());
 		assertEquals("All Players", FaceSwapTargetScope.ALL_PLAYERS.toString());
 	}
 

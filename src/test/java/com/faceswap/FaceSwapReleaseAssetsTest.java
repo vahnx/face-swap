@@ -56,6 +56,19 @@ public class FaceSwapReleaseAssetsTest
 	}
 
 	@Test
+	public void contentCreatorReleaseAssetsIncludeNewestReleaseHeads()
+	{
+		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+			"/heads/content_creators/faux_osrs_front.png") != null);
+		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+			"/heads/content_creators/faux_osrs_back.png") != null);
+		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+			"/heads/content_creators/grim_front.png") != null);
+		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+			"/heads/content_creators/grim_back.png") != null);
+	}
+
+	@Test
 	public void sidePanelIconUsesPluginSpecificResource()
 	{
 		assertEquals("/face_swap_icon.png", FaceSwapPlugin.SIDEPANEL_ICON_RESOURCE);

@@ -2,6 +2,7 @@ package com.faceswap;
 
 public enum FaceSwapTargetScope
 {
+	DISABLED("Disabled"),
 	SELF("Your Player"),
 	FRIENDS("Friends"),
 	CHAT_CHANNEL("Chat Channel"),

@@ -313,7 +313,7 @@ public class FaceSwapPlugin extends Plugin
 			keyManager.unregisterKeyListener(hotkeyListener);
 			hotkeyListener = null;
 		}
-		removePrototype3dObject();
+		removePrototype3dInstances();
 		removeMaskTrackingRigs();
 		if (clientToolbar != null && navigationButton != null)
 		{
@@ -460,7 +460,7 @@ public class FaceSwapPlugin extends Plugin
 		{
 			// Scene rebuilds discard RuneLiteObjects even when their Java wrappers
 			// remain active. Clear the instances so the next logged-in tick recreates them.
-			removePrototype3dObject();
+			removePrototype3dInstances();
 			removeMaskTrackingRigs();
 		}
 	}
@@ -486,7 +486,7 @@ public class FaceSwapPlugin extends Plugin
 		}
 		if (!isPrototype3dEnabled() || client.getGameState() != GameState.LOGGED_IN || localPlayer == null)
 		{
-			removePrototype3dObject();
+			removePrototype3dInstances();
 			return;
 		}
 
@@ -697,13 +697,29 @@ public class FaceSwapPlugin extends Plugin
 		}
 
 		if ("renderMode".equals(event.getKey())
-			|| "selectedHead".equals(event.getKey())
-			|| TRIANGLE_OVERRIDES_KEY.equals(event.getKey())
-			|| "dkMode".equals(event.getKey())
+			|| "selectedHead".equals(event.getKey()))
+		{
+			clientThread.invoke(this::removePrototype3dInstances);
+		}
+		else if (TRIANGLE_OVERRIDES_KEY.equals(event.getKey()))
+		{
+			Set<FaceSwapHead> changedHeads =
+				FaceSwapHeadQualityProfiles.findChangedHeads(event.getOldValue(), event.getNewValue());
+			clientThread.invoke(() ->
+			{
+				invalidatePrototype3dModelCache(changedHeads);
+				removePrototype3dInstances();
+			});
+		}
+		else if ("dkMode".equals(event.getKey())
 			|| "prototype3dTextureWidth".equals(event.getKey())
 			|| HELMET_PROFILE_CONFIG_KEYS.contains(event.getKey()))
 		{
-			clientThread.invoke(this::removePrototype3dObject);
+			clientThread.invoke(() ->
+			{
+				clearPrototype3dModelCache();
+				removePrototype3dInstances();
+			});
 		}
 		if ("renderMode".equals(event.getKey()) || "maskTrackingMode".equals(event.getKey()))
 		{
@@ -1793,13 +1809,12 @@ public class FaceSwapPlugin extends Plugin
 			| (int) (blue / samples);
 	}
 
-	private void removePrototype3dObject()
+	private void removePrototype3dInstances()
 	{
 		List<RuneLiteObject> objects = prototype3dInstances.values().stream()
 			.map(instance -> instance.object)
 			.collect(Collectors.toList());
 		prototype3dInstances.clear();
-		prototype3dModelCache.clear();
 		prototype3dObject = null;
 		if (!objects.isEmpty())
 		{
@@ -1814,6 +1829,36 @@ public class FaceSwapPlugin extends Plugin
 				}
 			});
 		}
+	}
+
+	private void clearPrototype3dModelCache()
+	{
+		prototype3dModelCache.clear();
+	}
+
+	private void invalidatePrototype3dModelCache(Set<FaceSwapHead> heads)
+	{
+		if (heads == null || heads.isEmpty())
+		{
+			return;
+		}
+		prototype3dModelCache.entrySet().removeIf(entry -> matchesPrototype3dCacheHead(entry.getKey(), heads));
+	}
+
+	private static boolean matchesPrototype3dCacheHead(String modelKey, Set<FaceSwapHead> heads)
+	{
+		if (modelKey == null || heads == null || heads.isEmpty())
+		{
+			return false;
+		}
+		for (FaceSwapHead head : heads)
+		{
+			if (modelKey.startsWith(head.name() + ':'))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void removeMaskTrackingRigs()
@@ -2499,10 +2544,39 @@ public class FaceSwapPlugin extends Plugin
 		{
 			return;
 		}
+		FaceSwapHead previousHead = getEffectiveSelectedHead();
+		String previousPlayerTargets = config.targetScope() == FaceSwapTargetScope.SPECIFIC_PLAYERS
+			? getTargetNames(previousHead)
+			: "";
+		String previousNpcTargets = config.npcTargetScope() == FaceSwapNpcTargetScope.SPECIFIC_NPCS
+			? getNpcTargetNames(previousHead)
+			: "";
 		playerHeadAssignments = null;
 		npcHeadAssignments = null;
 		configManager.setConfiguration(CONFIG_GROUP, "selectedHead", selectedHead);
+		preserveSpecificTargetsOnHeadChange(previousHead, selectedHead, previousPlayerTargets, previousNpcTargets);
 		refreshPanel();
+	}
+
+	private void preserveSpecificTargetsOnHeadChange(
+		FaceSwapHead previousHead,
+		FaceSwapHead selectedHead,
+		String previousPlayerTargets,
+		String previousNpcTargets)
+	{
+		if (previousHead == selectedHead)
+		{
+			return;
+		}
+
+		if (!previousPlayerTargets.isBlank() && getTargetNames(selectedHead).isBlank())
+		{
+			setTargetNames(previousPlayerTargets);
+		}
+		if (!previousNpcTargets.isBlank() && getNpcTargetNames(selectedHead).isBlank())
+		{
+			setNpcTargetNames(previousNpcTargets);
+		}
 	}
 
 	void setTargetScope(FaceSwapTargetScope targetScope)

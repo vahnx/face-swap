@@ -31,6 +31,14 @@ Current release creators:
 
 Open the Face Swap sidepanel, choose a creator head, then use the Target button to select who the head should apply to.
 
+For local development on macOS, launch RuneLite through this repo's Gradle task so the required JDK module export is applied:
+
+```bash
+bash ./gradlew run
+```
+
+If you saw `IllegalAccessError` mentioning `net.runelite.client.ui.OSXFullScreenAdapter` and `com.apple.eawt.FullScreenAdapter`, this launcher configuration is the fix.
+
 Render modes:
 
 - `3D`

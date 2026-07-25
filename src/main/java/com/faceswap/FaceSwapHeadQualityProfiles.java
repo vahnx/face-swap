@@ -6,7 +6,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 
 final class FaceSwapHeadQualityProfiles
@@ -53,6 +55,21 @@ final class FaceSwapHeadQualityProfiles
 			}
 		}
 		return serialized.toString();
+	}
+
+	static Set<FaceSwapHead> findChangedHeads(String previousOverrides, String currentOverrides)
+	{
+		Map<FaceSwapHead, FaceSwapTriangleCount> previous = parseOverrides(previousOverrides);
+		Map<FaceSwapHead, FaceSwapTriangleCount> current = parseOverrides(currentOverrides);
+		EnumSet<FaceSwapHead> changed = EnumSet.noneOf(FaceSwapHead.class);
+		for (FaceSwapHead head : FaceSwapHead.values())
+		{
+			if (previous.get(head) != current.get(head))
+			{
+				changed.add(head);
+			}
+		}
+		return changed;
 	}
 
 	private static Map<FaceSwapHead, FaceSwapTriangleCount> parseOverrides(String serializedOverrides)

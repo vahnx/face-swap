@@ -24,6 +24,9 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -60,6 +63,8 @@ class FaceSwapPanel extends PluginPanel
 	private static final int MODE_THUMBNAIL_WIDTH = 56;
 	private static final int MODE_ARTWORK_HEIGHT = 54;
 	private static final int MODE_LABEL_HEIGHT = 18;
+	private static final Map<FaceSwapHead, BufferedImage> PICKER_THUMBNAIL_CACHE = new ConcurrentHashMap<>();
+	private static volatile CompletableFuture<Void> pickerThumbnailPreload = CompletableFuture.completedFuture(null);
 	private static final ImageIcon TARGET_PICK_ICON = new ImageIcon(createTargetPickerThumbnail(false));
 	private static final ImageIcon TARGET_PICK_ACTIVE_ICON = new ImageIcon(createTargetPickerThumbnail(true));
 	private static final ImageIcon THREE_D_MODE_ICON =
@@ -106,11 +111,13 @@ class FaceSwapPanel extends PluginPanel
 	private JPanel npcTargetNamesRow;
 
 	private JDialog activeHeadPicker;
+	private boolean openingHeadPicker;
 	private boolean refreshing;
 
 	FaceSwapPanel(FaceSwapPlugin plugin, FaceSwapPanelState initialState)
 	{
 		this.plugin = plugin;
+		preloadPickerThumbnailsAsync();
 
 		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -122,7 +129,7 @@ class FaceSwapPanel extends PluginPanel
 		selectedHeadPreview.setPreferredSize(new Dimension(96, 96));
 		selectedHeadPreview.setHorizontalAlignment(SwingConstants.CENTER);
 		selectedHeadPreview.setBorder(BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR));
-		selectedHeadPreview.addActionListener(e -> SwingUtilities.invokeLater(this::openHeadPicker));
+		selectedHeadPreview.addActionListener(e -> openHeadPicker());
 		pickPlayerButton.setPreferredSize(new Dimension(PICKER_THUMBNAIL_SIZE, PICKER_THUMBNAIL_SIZE));
 		pickPlayerButton.setToolTipText("Pick a player or NPC in-game");
 		pickPlayerButton.getAccessibleContext().setAccessibleName("Pick a Target");
@@ -523,39 +530,67 @@ class FaceSwapPanel extends PluginPanel
 
 	private void openHeadPicker()
 	{
+		if (openingHeadPicker)
+		{
+			return;
+		}
+
+		JDialog existingDialog = activeHeadPicker;
+		if (existingDialog != null && existingDialog.isShowing())
+		{
+			existingDialog.toFront();
+			existingDialog.requestFocus();
+			return;
+		}
+
+		openingHeadPicker = true;
 		closeActiveHeadPicker();
 
-		JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Choose Face Swap Character");
-		activeHeadPicker = dialog;
-
-		JPanel content = new JPanel(new GridLayout(1, 2, 12, 0));
-		content.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-		content.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		content.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.FICTIONAL_CHARACTER)));
-		content.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.CONTENT_CREATOR)));
-
-		dialog.setContentPane(content);
-		dialog.getRootPane().registerKeyboardAction(
-			event -> plugin.handleEscapePressed(),
-			KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
-			JComponent.WHEN_IN_FOCUSED_WINDOW);
-		dialog.pack();
-		dialog.setLocationRelativeTo(this);
-		dialog.addWindowListener(new WindowAdapter()
+		try
 		{
-			@Override
-			public void windowClosing(WindowEvent event)
-			{
-				clearActiveHeadPicker(dialog);
-			}
+			JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Choose Face Swap Character");
+			activeHeadPicker = dialog;
 
-			@Override
-			public void windowClosed(WindowEvent event)
+			dialog.setContentPane(createLoadingHeadPickerContent());
+			dialog.getRootPane().registerKeyboardAction(
+				event -> plugin.handleEscapePressed(),
+				KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+				JComponent.WHEN_IN_FOCUSED_WINDOW);
+			dialog.pack();
+			dialog.setLocationRelativeTo(this);
+			dialog.addWindowListener(new WindowAdapter()
 			{
-				clearActiveHeadPicker(dialog);
-			}
-		});
-		dialog.setVisible(true);
+				@Override
+				public void windowClosing(WindowEvent event)
+				{
+					clearActiveHeadPicker(dialog);
+				}
+
+				@Override
+				public void windowClosed(WindowEvent event)
+				{
+					clearActiveHeadPicker(dialog);
+				}
+			});
+			dialog.setVisible(true);
+			preloadPickerThumbnailsAsync().thenRun(() -> SwingUtilities.invokeLater(() ->
+			{
+				if (activeHeadPicker != dialog)
+				{
+					return;
+				}
+
+				dialog.setContentPane(createHeadPickerContent());
+				dialog.pack();
+				dialog.setLocationRelativeTo(this);
+				dialog.revalidate();
+				dialog.repaint();
+			}));
+		}
+		finally
+		{
+			openingHeadPicker = false;
+		}
 	}
 
 	private JPanel headPickerGrid(FaceSwapHeadCategory category)
@@ -595,6 +630,28 @@ class FaceSwapPanel extends PluginPanel
 			grid.add(emptyLabel);
 		}
 		return grid;
+	}
+
+	private JPanel createHeadPickerContent()
+	{
+		JPanel content = new JPanel(new GridLayout(1, 2, 12, 0));
+		content.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+		content.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		content.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.FICTIONAL_CHARACTER)));
+		content.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.CONTENT_CREATOR)));
+		return content;
+	}
+
+	private static JPanel createLoadingHeadPickerContent()
+	{
+		JPanel content = new JPanel(new BorderLayout());
+		content.setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
+		content.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		JLabel loadingLabel = new JLabel("Loading characters...", SwingConstants.CENTER);
+		loadingLabel.setForeground(Color.WHITE);
+		content.add(loadingLabel, BorderLayout.CENTER);
+		content.setPreferredSize(new Dimension(360, 180));
+		return content;
 	}
 
 	static List<FaceSwapHead> orderedHeadsForPicker(FaceSwapHeadCategory category)
@@ -740,6 +797,11 @@ class FaceSwapPanel extends PluginPanel
 
 	static BufferedImage createPickerThumbnail(FaceSwapHead head)
 	{
+		return PICKER_THUMBNAIL_CACHE.computeIfAbsent(head, FaceSwapPanel::createPickerThumbnailUncached);
+	}
+
+	private static BufferedImage createPickerThumbnailUncached(FaceSwapHead head)
+	{
 		BufferedImage source = FaceSwapHeadImages.get(head, FaceSwapHeadDirection.FRONT);
 		BufferedImage thumbnail = new BufferedImage(
 			PICKER_THUMBNAIL_SIZE, PICKER_THUMBNAIL_SIZE, BufferedImage.TYPE_INT_ARGB);
@@ -770,6 +832,33 @@ class FaceSwapPanel extends PluginPanel
 			graphics.dispose();
 		}
 		return thumbnail;
+	}
+
+	private static CompletableFuture<Void> preloadPickerThumbnailsAsync()
+	{
+		CompletableFuture<Void> preload = pickerThumbnailPreload;
+		if (!preload.isDone())
+		{
+			return preload;
+		}
+
+		synchronized (FaceSwapPanel.class)
+		{
+			preload = pickerThumbnailPreload;
+			if (!preload.isDone())
+			{
+				return preload;
+			}
+
+			pickerThumbnailPreload = CompletableFuture.runAsync(() ->
+			{
+				for (FaceSwapHead head : FaceSwapHead.values())
+				{
+					createPickerThumbnail(head);
+				}
+			});
+			return pickerThumbnailPreload;
+		}
 	}
 
 	private static void drawPickerLabel(Graphics2D graphics, String text, int labelY)

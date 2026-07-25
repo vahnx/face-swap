@@ -401,6 +401,7 @@ class FaceSwapPanel extends PluginPanel
 	{
 		buttonGroup.add(button);
 		button.setMargin(new Insets(0, 0, 0, 0));
+		button.setFocusable(false);
 		button.setFocusPainted(false);
 		button.setContentAreaFilled(true);
 		button.setOpaque(true);

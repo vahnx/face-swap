@@ -1815,6 +1815,7 @@ public class FaceSwapPlugin extends Plugin
 			.map(instance -> instance.object)
 			.collect(Collectors.toList());
 		prototype3dInstances.clear();
+		clearPrototype3dModelCache();
 		prototype3dObject = null;
 		if (!objects.isEmpty())
 		{

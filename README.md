@@ -13,7 +13,6 @@ Swap faces onto OSRS player or NPC models.
 Current release creators:
 
 - **Sardaco:** [Kick](https://kick.com/sardaco) | [YouTube](https://www.youtube.com/@SardacoTV) | [Twitch](https://www.twitch.tv/sardaco) | [X](https://x.com/Sardaco)
-- **Faux:** [Kick](https://kick.com/faux) | [YouTube](https://www.youtube.com/@FauxOSRS) | [Twitch](https://www.twitch.tv/faux) | [X](https://x.com/Faux_Freedom)
 - **Grim:** [Kick](https://kick.com/grimosrs) | [YouTube](https://www.youtube.com/@GrimOSRS) | [X](https://x.com/osrs_grim)
 - **King Condor:** [Kick](https://kick.com/kingcondor) | [YouTube](https://www.youtube.com/@KingCondor) | [Twitch](https://www.twitch.tv/kingcondor6969) | [X](https://x.com/KingCondor69)
 - **Alfie:** [Kick](https://kick.com/alfie) | [YouTube](https://www.youtube.com/channel/UCEQoTuUGfulxInScbck1_Xw) | [Twitch](https://www.twitch.tv/alfie) | [X](https://x.com/RSAlfierules)

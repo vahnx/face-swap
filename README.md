@@ -31,14 +31,6 @@ Current release creators:
 
 Open the Face Swap sidepanel, choose a creator head, then use the Target button to select who the head should apply to.
 
-For local development on macOS, launch RuneLite through this repo's Gradle task so the required JDK module export is applied:
-
-```bash
-bash ./gradlew run
-```
-
-If you saw `IllegalAccessError` mentioning `net.runelite.client.ui.OSXFullScreenAdapter` and `com.apple.eawt.FullScreenAdapter`, this launcher configuration is the fix.
-
 Render modes:
 
 - `3D`
@@ -54,10 +46,18 @@ The private permission log records the creator name, approval date/time, platfor
 ## Known Issues
 
 - Wraparounds do not work properly with helmets and weapons equipped
+- `3D` mode is designed primarily for players and humanoid, single-head NPCs
+- Non-humanoid NPCs, pets, and some enemies can render with stretched geometry, misplaced heads, or incorrect mask placement in `3D` mode
+- Multi-head NPCs and bosses, such as the King Black Dragon, are not yet supported correctly in `3D` mode
 
 ## Submissions & Requests
 
 If you wish to have your face added,  submit feature requests, or other inquiries, email [osrsfaceswap@gmail.com](mailto:osrsfaceswap@gmail.com) or [open a GitHub issue](https://github.com/vahnx/face-swap/issues/new).
+
+## Future Updates
+
+- Improve `3D` mode compatibility for non-humanoid NPCs and pets
+- Investigate better support for multi-head NPCs and bosses
 
 ## Support Development
 

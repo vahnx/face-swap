@@ -1,10 +1,6 @@
 # RuneLite Plugin Development - Agent Guidelines
 
-This repository uses the shared RuneLite plugin guidance in this file plus Face Swap-specific rules in `FACE_SWAP_GUIDELINES.md`.
-
-Before making Face Swap changes, follow both documents:
-- Use this file for shared RuneLite plugin standards.
-- Use `FACE_SWAP_GUIDELINES.md` for repository-specific behavior, asset, and safety rules.
+This file contains the shared RuneLite plugin standards for Face Swap development.
 
 ## Logging
 

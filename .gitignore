@@ -8,6 +8,7 @@ nbactions.xml
 nb-configuration.xml
 nbproject/
 /dev-assets/
+/private-notes/
 /tmp/
 __pycache__/
 *.pyc

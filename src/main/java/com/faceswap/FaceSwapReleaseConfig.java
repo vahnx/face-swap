@@ -8,6 +8,17 @@ import net.runelite.client.config.ConfigItem;
 public interface FaceSwapReleaseConfig extends Config
 {
 	@ConfigItem(
+		keyName = "selectedHead",
+		name = "Selected Head",
+		description = "The creator head to apply",
+		hidden = true
+	)
+	default FaceSwapHead selectedHead()
+	{
+		return FaceSwapHead.SARDACO;
+	}
+
+	@ConfigItem(
 		keyName = "renderMode",
 		name = "Style",
 		description = "Renders a rigged 3D head, a projected wraparound, or a front face mask with straps.",
@@ -16,7 +27,7 @@ public interface FaceSwapReleaseConfig extends Config
 	)
 	default FaceSwapRenderMode renderMode()
 	{
-		return FaceSwapRenderMode.THREE_D;
+		return FaceSwapRenderMode.MASK;
 	}
 
 	@ConfigItem(

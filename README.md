@@ -17,8 +17,8 @@ Current release creators:
 - **King Condor:** [Kick](https://kick.com/kingcondor) | [YouTube](https://www.youtube.com/@KingCondor) | [Twitch](https://www.twitch.tv/kingcondor6969) | [X](https://x.com/KingCondor69)
 - **Alfie:** [Kick](https://kick.com/alfie) | [YouTube](https://www.youtube.com/channel/UCEQoTuUGfulxInScbck1_Xw) | [Twitch](https://www.twitch.tv/alfie) | [X](https://x.com/RSAlfierules)
 - **DearLola:** [Kick](https://kick.com/dearlola1) | [YouTube](https://www.youtube.com/thedearlola) | [Twitch](https://www.twitch.tv/dearlola1) | [X](https://x.com/DearLola1)
-- **Beggar:** [YouTube](https://www.youtube.com/@beggarofficial) | [Twitch](https://www.twitch.tv/beggarofficial) | [X](https://x.com/BeggarOfficial)
-- **TPapaSlice:** [YouTube](https://www.youtube.com/@TpapaSLICE) | [Twitch](https://www.twitch.tv/tpapaslice) | [X](https://x.com/TpapaTV)
+- **Beggar Official:** [YouTube](https://www.youtube.com/@beggarofficial) | [Twitch](https://www.twitch.tv/beggarofficial) | [X](https://x.com/BeggarOfficial)
+- **TpapaSLICE:** [Kick](https://kick.com/tpapaslice) | [YouTube](https://www.youtube.com/@TpapaSLICE) | [Twitch](https://www.twitch.tv/tpapaslice) | [X](https://x.com/TpapaTV)
 - **ZeCookies:** [Kick](https://kick.com/zecookies) | [YouTube](https://www.youtube.com/@zecookiess) | [Twitch](https://www.twitch.tv/zecookies) | [X](https://x.com/zecookiess)
 - **Prison Joe:** [YouTube](https://www.youtube.com/@PJWIDTH) | [Twitch](https://www.twitch.tv/prisonjoe) | [X](https://x.com/Prison_Joseph)
 

@@ -107,7 +107,7 @@ public interface FaceSwapConfig extends Config
 	)
 	default FaceSwapRenderMode renderMode()
 	{
-		return FaceSwapRenderMode.THREE_D;
+		return FaceSwapRenderMode.MASK;
 	}
 
 	@ConfigItem(

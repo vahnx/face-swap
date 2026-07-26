@@ -152,8 +152,8 @@ class FaceSwapPanel extends PluginPanel
 		configureModeButton(wraparoundModeButton, FaceSwapRenderMode.TWO_D, renderModeGroup);
 		JPanel renderModeRow = new JPanel(new GridLayout(1, 3, 4, 0));
 		renderModeRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		renderModeRow.add(threeDModeButton);
 		renderModeRow.add(maskModeButton);
+		renderModeRow.add(threeDModeButton);
 		renderModeRow.add(wraparoundModeButton);
 		headSection.add(fullWidthRow(renderModeRow));
 

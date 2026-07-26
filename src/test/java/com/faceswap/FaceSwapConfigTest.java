@@ -21,14 +21,15 @@ public class FaceSwapConfigTest
 	};
 
 	@Test
-	public void defaultsTo3dMode()
+	public void defaultsToMaskModeAndSardaco()
 	{
 		assertEquals(FaceSwapHead.SARDACO, config.selectedHead());
+		assertEquals(FaceSwapHead.SARDACO, releaseConfig.selectedHead());
 		assertEquals(FaceSwapHead.SARDACO, FaceSwapHead.values()[0]);
 		assertEquals(FaceSwapRenderMode.MASK, FaceSwapRenderMode.values()[1]);
 		assertEquals(FaceSwapRenderMode.TWO_D, FaceSwapRenderMode.values()[2]);
-		assertEquals(FaceSwapRenderMode.THREE_D, config.renderMode());
-		assertEquals(FaceSwapRenderMode.THREE_D, releaseConfig.renderMode());
+		assertEquals(FaceSwapRenderMode.MASK, config.renderMode());
+		assertEquals(FaceSwapRenderMode.MASK, releaseConfig.renderMode());
 		assertFalse(config.dkMode());
 		assertFalse(config.debugProjection());
 		assertFalse(config.opaqueBacking());

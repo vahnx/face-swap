@@ -667,7 +667,10 @@ public class FaceSwapPlugin extends Plugin
 			npcHeadAssignments = null;
 		}
 
-		if ("renderMode".equals(event.getKey()) || TRIANGLE_OVERRIDES_KEY.equals(event.getKey()))
+		if ("renderMode".equals(event.getKey())
+			|| TRIANGLE_OVERRIDES_KEY.equals(event.getKey())
+			|| "targetScope".equals(event.getKey())
+			|| "npcTargetScope".equals(event.getKey()))
 		{
 			refreshPanel();
 		}
@@ -2131,7 +2134,7 @@ public class FaceSwapPlugin extends Plugin
 		String prototypeEnabled = configManager.getConfiguration(CONFIG_GROUP, "prototype3dEnabled");
 		if (renderMode == null)
 		{
-			configManager.setConfiguration(CONFIG_GROUP, "renderMode", FaceSwapRenderMode.THREE_D);
+			configManager.setConfiguration(CONFIG_GROUP, "renderMode", FaceSwapRenderMode.MASK);
 		}
 		else if ("WRAPAROUND".equals(renderMode) || "FACE_OVERLAY".equals(renderMode)
 			|| ("MASK".equals(renderMode) && prototypeEnabled != null))

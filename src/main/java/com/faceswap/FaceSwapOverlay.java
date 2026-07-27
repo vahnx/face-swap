@@ -1265,8 +1265,12 @@ class FaceSwapOverlay extends Overlay
 		Model model = player.getModel();
 		LocalPoint localLocation = player.getLocalLocation();
 		WorldView worldView = player.getWorldView();
+		if (model == null || localLocation == null || worldView == null)
+		{
+			return false;
+		}
 		ModelBounds bounds = getModelBounds(model);
-		if (model == null || localLocation == null || worldView == null || bounds == null)
+		if (bounds == null)
 		{
 			return false;
 		}

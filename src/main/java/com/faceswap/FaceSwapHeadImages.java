@@ -82,7 +82,12 @@ final class FaceSwapHeadImages
 			{
 				return createEstimatedSide(front, back, direction);
 			}
-			return front != null ? front : back;
+			if (front != null || back != null)
+			{
+				return front != null ? front : back;
+			}
+			// Base-only assets, such as emojis, use the same image for every view.
+			return get(head);
 		}
 
 		return get(head);

@@ -39,6 +39,15 @@ public class FaceSwapHeadImagesTest
 	}
 
 	@Test
+	public void baseOnlyEmojiAssetsWorkForEveryDirection()
+	{
+		BufferedImage base = FaceSwapHeadImages.get(FaceSwapHead.HEART, FaceSwapHeadDirection.FRONT);
+		assertSame(base, FaceSwapHeadImages.get(FaceSwapHead.HEART, FaceSwapHeadDirection.BACK));
+		assertSame(base, FaceSwapHeadImages.get(FaceSwapHead.HEART, FaceSwapHeadDirection.LEFT));
+		assertSame(base, FaceSwapHeadImages.get(FaceSwapHead.HEART, FaceSwapHeadDirection.RIGHT));
+	}
+
+	@Test
 	public void releaseHeadsUseBundledDirectionalAssets()
 	{
 		for (FaceSwapHead head : FaceSwapHead.values())

@@ -29,5 +29,3 @@ The following existing entries did not expose a reliable current count from the 
 ## Ordering Policy
 
 The popup uses a manually curated approximate popularity order, not a live network lookup. For a creator with multiple platforms, use the largest credible public audience figure as the primary placement signal, then apply reasonable judgment for platform overlap and retain prior relative placement where a count cannot be verified.
-
-`TORVESTA` and `PURESPAM` remain enum placeholders for future assets, but both are unavailable (`releaseAvailable=false` and `debugAvailable=false`). The picker filters unavailable entries, so they do not appear in normal or debug launches.

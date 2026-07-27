@@ -1790,15 +1790,7 @@ public class FaceSwapPlugin extends Plugin
 
 	static short toPrototypeHsl(FaceSwapHead head, int rgb)
 	{
-		if (head != FaceSwapHead.ALFIE)
-		{
-			return JagexColor.rgbToHSL(rgb, 1d);
-		}
-
-		short sampled = JagexColor.rgbToHSL(rgb, 1d);
-		// Alfie's source has a strong blue cast. Preserve its luminance detail but
-		// keep every triangle in the same subdued pink-neutral palette family.
-		return JagexColor.packHSL(0, 1, JagexColor.unpackLuminance(sampled));
+		return JagexColor.rgbToHSL(rgb, 1d);
 	}
 
 	static int resolvePrototypeGlobalYShift(boolean helmetEquipped, int configuredShift)

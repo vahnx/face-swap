@@ -8,16 +8,12 @@ import static org.junit.Assert.assertEquals;
 public class FaceSwapPrototypeColorTest
 {
 	@Test
-	public void mapsAlfiePixelsToStableNeutralPalette()
+	public void preservesAlfiePixelColors()
 	{
 		short light = FaceSwapPlugin.toPrototypeHsl(FaceSwapHead.ALFIE, 0xC8C8E6);
 		short dark = FaceSwapPlugin.toPrototypeHsl(FaceSwapHead.ALFIE, 0x202851);
-		assertEquals(0, JagexColor.unpackHue(light));
-		assertEquals(1, JagexColor.unpackSaturation(light));
-		assertEquals(0, JagexColor.unpackHue(dark));
-		assertEquals(1, JagexColor.unpackSaturation(dark));
-		assertEquals(JagexColor.unpackLuminance(JagexColor.rgbToHSL(0xC8C8E6, 1d)),
-			JagexColor.unpackLuminance(light));
+		assertEquals(JagexColor.rgbToHSL(0xC8C8E6, 1d), light);
+		assertEquals(JagexColor.rgbToHSL(0x202851, 1d), dark);
 	}
 
 	@Test

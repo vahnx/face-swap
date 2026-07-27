@@ -44,6 +44,17 @@ public interface FaceSwapConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "tabbedHeadPicker",
+		name = "Tabbed Head Picker",
+		description = "Displays the fictional, creator, and emoji choices in tabs instead of side-by-side columns.",
+		position = 0
+	)
+	default boolean tabbedHeadPicker()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "targetScope",
 		name = "Apply To",
 		description = "Which players should receive the selected head",

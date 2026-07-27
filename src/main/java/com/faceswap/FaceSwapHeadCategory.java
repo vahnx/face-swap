@@ -3,7 +3,10 @@ package com.faceswap;
 enum FaceSwapHeadCategory
 {
 	FICTIONAL_CHARACTER("Fictional Characters", "fictional_characters"),
-	CONTENT_CREATOR("Content Creators", "content_creators");
+	EMOJI("Emojis", "emojis"),
+	CONTENT_CREATOR("Content Creators", "content_creators"),
+	CONTENT_CREATOR_3D("3D Block Variants", "content_creators_3d"),
+	CUSTOM("Custom", "custom_heads");
 
 	private final String displayName;
 	private final String resourceDirectory;

@@ -31,14 +31,14 @@ public class FaceSwapPanelTest
 	}
 
 	@Test
-	public void fictionalPickerPlacesAgentAndMonkeyOnSecondLastRow()
+	public void fictionalPickerPlacesNewHeadsFirstAndClownSeventh()
 	{
 		List<FaceSwapHead> heads = FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.FICTIONAL_CHARACTER);
 
-		assertEquals(FaceSwapHead.AGENT, heads.get(6));
-		assertEquals(FaceSwapHead.MONKEY, heads.get(7));
-		assertEquals(FaceSwapHead.CHOSEN_ONE, heads.get(8));
-		assertEquals(FaceSwapHead.MARTIAL_ARTIST, heads.get(9));
+		assertEquals(FaceSwapHead.PUG, heads.get(0));
+		assertEquals(FaceSwapHead.CLOWN, heads.get(6));
+		assertTrue(heads.contains(FaceSwapHead.AGENT));
+		assertTrue(heads.contains(FaceSwapHead.MONKEY));
 	}
 
 	@Test
@@ -46,12 +46,46 @@ public class FaceSwapPanelTest
 	{
 		List<FaceSwapHead> heads = FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.CONTENT_CREATOR);
 
-		assertEquals(FaceSwapHead.ODABLOCK, heads.get(0));
-		assertEquals(FaceSwapHead.FAUX_OSRS, heads.get(1));
-		assertEquals(FaceSwapHead.ALFIE, heads.get(3));
-		assertEquals(FaceSwapHead.SARDACO, heads.get(4));
-		assertEquals(FaceSwapHead.KING_CONDOR, heads.get(5));
-		assertEquals(FaceSwapHead.GRIM, heads.get(11));
+		FaceSwapHead[] expectedCreators = {
+			FaceSwapHead.ODABLOCK,
+			FaceSwapHead.SARDACO,
+			FaceSwapHead.SKILL_SPECS,
+			FaceSwapHead.TASTYLIFE,
+			FaceSwapHead.TPAPASLICE,
+			FaceSwapHead.PRISONJOE,
+			FaceSwapHead.ZECOOKIES,
+			FaceSwapHead.ALFIE,
+			FaceSwapHead.FOX,
+			FaceSwapHead.FOX_OSRS,
+			FaceSwapHead.KING_CONDOR,
+			FaceSwapHead.DEARLOLA,
+			FaceSwapHead.ELIOP14,
+			FaceSwapHead.JILLYFISH,
+			FaceSwapHead.BEGGAR,
+			FaceSwapHead.GRIM,
+			FaceSwapHead.ASIAN_ANDY
+		};
+
+		for (FaceSwapHead creator : expectedCreators)
+		{
+			assertTrue(heads.contains(creator));
+		}
+	}
+
+	@Test
+	public void emojiPickerOmitsVisualDuplicates()
+	{
+		assertEquals(List.of(
+			FaceSwapHead.SMILEY,
+			FaceSwapHead.HEART_EYES,
+			FaceSwapHead.POOP,
+			FaceSwapHead.COOL,
+			FaceSwapHead.ANGRY,
+			FaceSwapHead.SAD,
+			FaceSwapHead.SURPRISED,
+			FaceSwapHead.HEART,
+			FaceSwapHead.ROBOT),
+			FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.EMOJI));
 	}
 
 	@Test

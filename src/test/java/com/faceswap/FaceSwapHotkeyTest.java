@@ -5,6 +5,7 @@ import java.awt.event.KeyEvent;
 import net.runelite.api.GameState;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -42,18 +43,11 @@ public class FaceSwapHotkeyTest
 	}
 
 	@Test
-	public void agentIsTheFirstFictionalCharacter()
+	public void agentRemainsASelectableFictionalCharacter()
 	{
-		FaceSwapHead firstFictionalCharacter = null;
-		for (FaceSwapHead head : FaceSwapHead.values())
-		{
-			if (head.getCategory() == FaceSwapHeadCategory.FICTIONAL_CHARACTER)
-			{
-				firstFictionalCharacter = head;
-				break;
-			}
-		}
-		assertTrue(firstFictionalCharacter == FaceSwapHead.AGENT);
+		assertEquals(FaceSwapHeadCategory.FICTIONAL_CHARACTER, FaceSwapHead.AGENT.getCategory());
+		assertTrue(FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.FICTIONAL_CHARACTER)
+			.contains(FaceSwapHead.AGENT));
 	}
 
 	private static KeyEvent keyEvent(int keyCode)

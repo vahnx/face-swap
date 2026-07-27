@@ -19,6 +19,17 @@ public interface FaceSwapReleaseConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "tabbedHeadPicker",
+		name = "Tabbed Head Picker",
+		description = "Displays the fictional, creator, and emoji choices in tabs instead of side-by-side columns.",
+		position = 0
+	)
+	default boolean tabbedHeadPicker()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "renderMode",
 		name = "Style",
 		description = "Renders a rigged 3D head, a projected wraparound, or a front face mask with straps.",

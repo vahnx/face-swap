@@ -31,6 +31,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -250,6 +253,13 @@ public class FaceSwapPlugin extends Plugin
 	private String lastPanelStatus;
 	private String lastPanelTargetNames;
 	private final AtomicBoolean panelRefreshQueued = new AtomicBoolean();
+	private final ExecutorService customImageExecutor = Executors.newSingleThreadExecutor(runnable ->
+	{
+		Thread thread = new Thread(runnable, "face-swap-custom-images");
+		thread.setDaemon(true);
+		return thread;
+	});
+	private final FaceSwapCustomImageStore customImageStore = new FaceSwapCustomImageStore();
 	private volatile String radiusPlayerNames = "";
 	private volatile Map<String, FaceSwapHead> playerHeadAssignments;
 	private volatile Map<String, FaceSwapHead> npcHeadAssignments;
@@ -283,6 +293,11 @@ public class FaceSwapPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		customImageExecutor.submit(() ->
+		{
+			customImageStore.load();
+			refreshPanel();
+		});
 		migrateHeadNames();
 		migrateHelmetTextureLift();
 		migrateRenderMode();
@@ -306,6 +321,8 @@ public class FaceSwapPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		customImageExecutor.shutdownNow();
+		FaceSwapHeadImages.setCustomImage(null);
 		pickPlayerMode = false;
 		hoveredPickActor = null;
 		if (hotkeyListener != null)
@@ -428,6 +445,10 @@ public class FaceSwapPlugin extends Plugin
 
 	boolean isHeadAvailable(FaceSwapHead head)
 	{
+		if (head == FaceSwapHead.CUSTOM)
+		{
+			return customImageStore.hasSelectedImage();
+		}
 		return head != null
 			&& (head.isReleaseAvailable() || (head.isDebugAvailable() && isDebugLaunch()));
 	}
@@ -446,6 +467,11 @@ public class FaceSwapPlugin extends Plugin
 	FaceSwapRenderMode getRenderMode()
 	{
 		return config.renderMode();
+	}
+
+	boolean useTabbedHeadPicker()
+	{
+		return config.tabbedHeadPicker();
 	}
 
 	boolean isPrototype3dEnabled()
@@ -2126,10 +2152,6 @@ public class FaceSwapPlugin extends Plugin
 
 	private void migrateRenderMode()
 	{
-		if ("FAUX".equals(configManager.getConfiguration(CONFIG_GROUP, "selectedHead")))
-		{
-			configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.SARDACO);
-		}
 		String renderMode = configManager.getConfiguration(CONFIG_GROUP, "renderMode");
 		String prototypeEnabled = configManager.getConfiguration(CONFIG_GROUP, "prototype3dEnabled");
 		if (renderMode == null)
@@ -2548,39 +2570,70 @@ public class FaceSwapPlugin extends Plugin
 		{
 			return;
 		}
-		FaceSwapHead previousHead = getEffectiveSelectedHead();
-		String previousPlayerTargets = config.targetScope() == FaceSwapTargetScope.SPECIFIC_PLAYERS
-			? getTargetNames(previousHead)
-			: "";
-		String previousNpcTargets = config.npcTargetScope() == FaceSwapNpcTargetScope.SPECIFIC_NPCS
-			? getNpcTargetNames(previousHead)
-			: "";
 		playerHeadAssignments = null;
 		npcHeadAssignments = null;
 		configManager.setConfiguration(CONFIG_GROUP, "selectedHead", selectedHead);
-		preserveSpecificTargetsOnHeadChange(previousHead, selectedHead, previousPlayerTargets, previousNpcTargets);
 		refreshPanel();
 	}
 
-	private void preserveSpecificTargetsOnHeadChange(
-		FaceSwapHead previousHead,
-		FaceSwapHead selectedHead,
-		String previousPlayerTargets,
-		String previousNpcTargets)
+	List<FaceSwapCustomImageStore.Entry> getCustomImages()
 	{
-		if (previousHead == selectedHead)
-		{
-			return;
-		}
+		return customImageStore.getRecents();
+	}
 
-		if (!previousPlayerTargets.isBlank() && getTargetNames(selectedHead).isBlank())
+	BufferedImage getCustomImage(String id)
+	{
+		return customImageStore.getImage(id);
+	}
+
+	void importCustomImage(java.nio.file.Path source, Consumer<String> callback)
+	{
+		customImageExecutor.submit(() ->
 		{
-			setTargetNames(previousPlayerTargets);
-		}
-		if (!previousNpcTargets.isBlank() && getNpcTargetNames(selectedHead).isBlank())
+			String status;
+			try
+			{
+				customImageStore.importImage(source);
+				configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.CUSTOM);
+				status = "Imported " + source.getFileName();
+			}
+			catch (IOException | RuntimeException ex)
+			{
+				status = "Could not import image: " + ex.getMessage();
+			}
+			String result = status;
+			SwingUtilities.invokeLater(() ->
+			{
+				callback.accept(result);
+				refreshPanel();
+			});
+		});
+	}
+
+	void selectCustomImage(String id)
+	{
+		customImageExecutor.submit(() ->
 		{
-			setNpcTargetNames(previousNpcTargets);
-		}
+			if (customImageStore.select(id))
+			{
+				configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.CUSTOM);
+			}
+			SwingUtilities.invokeLater(this::refreshPanel);
+		});
+	}
+
+	void clearCustomImages(Runnable callback)
+	{
+		customImageExecutor.submit(() ->
+		{
+			customImageStore.clear();
+			configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.SARDACO);
+			SwingUtilities.invokeLater(() ->
+			{
+				callback.run();
+				refreshPanel();
+			});
+		});
 	}
 
 	void setTargetScope(FaceSwapTargetScope targetScope)

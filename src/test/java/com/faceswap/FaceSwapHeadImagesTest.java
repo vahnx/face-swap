@@ -1,10 +1,13 @@
 package com.faceswap;
 
 import java.awt.image.BufferedImage;
+import java.util.Locale;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 
 public class FaceSwapHeadImagesTest
 {
@@ -36,23 +39,34 @@ public class FaceSwapHeadImagesTest
 	}
 
 	@Test
-	public void approvedHeadsUseBundledDirectionalAssets()
+	public void releaseHeadsUseBundledDirectionalAssets()
 	{
-		FaceSwapHead[] approvedHeads = {
-			FaceSwapHead.SARDACO,
-			FaceSwapHead.FAUX_OSRS,
-			FaceSwapHead.GRIM,
-			FaceSwapHead.KING_CONDOR,
-			FaceSwapHead.ALFIE,
-			FaceSwapHead.DEARLOLA,
-			FaceSwapHead.BEGGAR,
-			FaceSwapHead.TPAPASLICE,
-			FaceSwapHead.ZECOOKIES,
-			FaceSwapHead.PRISONJOE
-		};
-
-		for (FaceSwapHead head : approvedHeads)
+		for (FaceSwapHead head : FaceSwapHead.values())
 		{
+			if (head == FaceSwapHead.CUSTOM)
+			{
+				continue;
+			}
+			if (!head.isReleaseAvailable())
+			{
+				continue;
+			}
+
+			String resourceBase = "/heads/" + head.getCategory().getResourceDirectory()
+				+ "/" + head.name().toLowerCase(Locale.ROOT);
+			if (head.getCategory() == FaceSwapHeadCategory.EMOJI)
+			{
+				assertNotNull(head + " base resource", FaceSwapHeadImages.class.getResource(resourceBase + ".png"));
+				BufferedImage image = FaceSwapHeadImages.get(head, FaceSwapHeadDirection.FRONT);
+				assertEquals(head + " width", 512, image.getWidth());
+				assertEquals(head + " height", 512, image.getHeight());
+				assertSame(head + " should use the same base image for both directions", image,
+					FaceSwapHeadImages.get(head, FaceSwapHeadDirection.BACK));
+				continue;
+			}
+			assertNotNull(head + " front resource", FaceSwapHeadImages.class.getResource(resourceBase + "_front.png"));
+			assertNotNull(head + " back resource", FaceSwapHeadImages.class.getResource(resourceBase + "_back.png"));
+
 			BufferedImage front = FaceSwapHeadImages.get(head, FaceSwapHeadDirection.FRONT);
 			BufferedImage back = FaceSwapHeadImages.get(head, FaceSwapHeadDirection.BACK);
 

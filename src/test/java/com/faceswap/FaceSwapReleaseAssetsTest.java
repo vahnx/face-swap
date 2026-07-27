@@ -53,15 +53,26 @@ public class FaceSwapReleaseAssetsTest
 			"/heads/fictional_characters/monkey_front.png") != null);
 		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
 			"/heads/fictional_characters/monkey_back.png") != null);
+		for (String head : new String[] {"pug", "horse", "rabbit", "penguin", "cat", "monkey_photo", "clown"})
+		{
+			assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+				"/heads/fictional_characters/" + head + "_front.png") != null);
+			assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+				"/heads/fictional_characters/" + head + "_back.png") != null);
+		}
 	}
 
 	@Test
 	public void contentCreatorReleaseAssetsIncludeNewestReleaseHeads()
 	{
 		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/content_creators/faux_osrs_front.png") != null);
+			"/heads/content_creators/fox_front.png") != null);
 		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/content_creators/faux_osrs_back.png") != null);
+			"/heads/content_creators/fox_back.png") != null);
+		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+			"/heads/content_creators_3d/fox_osrs_front.png") != null);
+		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
+			"/heads/content_creators_3d/fox_osrs_back.png") != null);
 		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
 			"/heads/content_creators/grim_front.png") != null);
 		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(

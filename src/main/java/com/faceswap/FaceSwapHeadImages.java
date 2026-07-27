@@ -18,9 +18,18 @@ final class FaceSwapHeadImages
 	private static final Map<FaceSwapHead, BufferedImage> CACHE = new EnumMap<>(FaceSwapHead.class);
 	private static final Map<FaceSwapHead, Map<FaceSwapHeadDirection, BufferedImage>> DIRECTIONAL_CACHE = new EnumMap<>(FaceSwapHead.class);
 	private static final Map<FaceSwapHead, Map<FaceSwapHeadDirection, Color>> AVERAGE_COLOR_CACHE = new EnumMap<>(FaceSwapHead.class);
+	private static volatile BufferedImage customImage;
 
 	private FaceSwapHeadImages()
 	{
+	}
+
+	static void setCustomImage(BufferedImage image)
+	{
+		customImage = image;
+		CACHE.remove(FaceSwapHead.CUSTOM);
+		DIRECTIONAL_CACHE.remove(FaceSwapHead.CUSTOM);
+		AVERAGE_COLOR_CACHE.remove(FaceSwapHead.CUSTOM);
 	}
 
 	static BufferedImage get(FaceSwapHead head)
@@ -44,12 +53,20 @@ final class FaceSwapHeadImages
 
 	private static BufferedImage loadOrCreate(FaceSwapHead head)
 	{
+		if (head == FaceSwapHead.CUSTOM && customImage != null)
+		{
+			return customImage;
+		}
 		BufferedImage image = loadResource(head);
 		return image == null ? createPlaceholder(head) : image;
 	}
 
 	private static BufferedImage loadDirectionalOrFallback(FaceSwapHead head, FaceSwapHeadDirection direction)
 	{
+		if (head == FaceSwapHead.CUSTOM && customImage != null)
+		{
+			return customImage;
+		}
 		BufferedImage image = loadResource(
 			head, getResourceName(head) + "_" + direction.getFileSuffix());
 		if (image != null)

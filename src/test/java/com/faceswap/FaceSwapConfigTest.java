@@ -30,6 +30,8 @@ public class FaceSwapConfigTest
 		assertEquals(FaceSwapRenderMode.TWO_D, FaceSwapRenderMode.values()[2]);
 		assertEquals(FaceSwapRenderMode.MASK, config.renderMode());
 		assertEquals(FaceSwapRenderMode.MASK, releaseConfig.renderMode());
+		assertTrue(config.tabbedHeadPicker());
+		assertTrue(releaseConfig.tabbedHeadPicker());
 		assertFalse(config.dkMode());
 		assertFalse(config.debugProjection());
 		assertFalse(config.opaqueBacking());
@@ -76,7 +78,7 @@ public class FaceSwapConfigTest
 	@Test
 	public void exposesOnlyReleaseControlsOutsideDeveloperMode()
 	{
-		assertEquals(Set.of(), visibleKeys(FaceSwapReleaseConfig.class));
+		assertEquals(Set.of("tabbedHeadPicker"), visibleKeys(FaceSwapReleaseConfig.class));
 	}
 
 	@Test

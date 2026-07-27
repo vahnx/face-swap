@@ -17,6 +17,27 @@ These rules apply to every generated face/head asset for this plugin.
   - Directional assets: `king_condor_front.png`, `king_condor_back.png`
 - Do not commit source images with solid backgrounds unless they are intentionally kept as references outside `src/main/resources/heads/`.
 
+## Creator Cutout Style
+
+Creator assets must match the existing streamer assets in the destination folder: realistic, isolated cardboard-cutout portraits with natural photographic or digitally painted facial, hair, and skin detail.
+
+- Use a front-facing portrait for `front` assets and a straight-on rear head portrait for `back` assets.
+- Include the head plus a small, clean neck or upper-shoulder silhouette, with plain shirt or collar fabric covering the lower neck and any exposed top-shoulder area.
+- Keep the subject as one clean isolated cutout with natural contours and no scene, props, clothing logos, text, or other people.
+- Keep front and back assets at comparable scale and vertical placement.
+- Treat the result as a realistic portrait cutout, not a game-model render.
+
+Every creator prompt must explicitly say:
+
+```text
+Match the realistic cardboard-cutout portrait style of the existing streamer assets in the destination folder. Use natural photographic or digitally painted facial, hair, and skin detail. Do not create a low-poly, faceted, voxel, blocky, clay, cartoon, illustrated, or 3D game-model render. Do not add geometric facets or hard-surface modeling.
+Cover the lower neck and any exposed top-shoulder area with a small amount of plain shirt or collar fabric. Do not leave a bare lower-neck or bare shoulder cutout unless the approved reference asset specifically requires it.
+```
+
+If the output looks faceted, low-poly, blocky, voxel-like, or like a 3D game model, discard it and regenerate it as a realistic portrait cutout. Do not post-process a block-style output into a creator asset.
+
+When adding a new creator, update `docs/creator-statistics.md` with a dated audience snapshot and place the creator in the popup order using the largest attributable public count from the linked Twitch, Kick, YouTube, or other listed social accounts. If a count cannot be verified, record that explicitly and preserve the existing relative order rather than guessing.
+
 ## Prompt Requirements
 
 Every image-generation prompt for a plugin asset must include this language or an equivalent stricter version:
@@ -29,6 +50,13 @@ Do not use #00ff00 anywhere in the subject.
 No cast shadow, no contact shadow, no reflection, no watermark, and no text unless explicitly requested.
 The final project asset must be a transparent PNG.
 ```
+
+## Generation Workflow
+
+- Generate assets sequentially: submit one image-generation request, wait for it to finish, inspect/save the result, and only then submit the next request.
+- Generate each direction separately and complete the front/back pair before moving to the next subject.
+- Do not batch many subjects or front/back requests into one tool call. Large batches can exceed orchestration or execution time limits and may leave the run incomplete; this is a reliability precaution, not a claim that the image model cannot generate multiple images.
+- If a request fails or times out, retry only the unfinished asset rather than restarting the entire batch.
 
 ## Post-Processing
 
@@ -60,6 +88,8 @@ If using another cleanup tool, verify:
 ## Directional Assets
 
 When creating wraparound-style assets, generate front and back directions separately. Do not ask for a single folded box/paper texture unless the implementation changes to a different texture layout.
+
+Emoji assets are an exception: because their front and back are identical, store one base file such as `smiley.png` without `_front` or `_back`. The runtime loader uses that base file for every direction.
 
 Recommended progression:
 

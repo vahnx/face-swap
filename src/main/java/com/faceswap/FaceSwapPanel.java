@@ -37,7 +37,9 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JTabbedPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
@@ -49,6 +51,7 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.Border;
 import javax.swing.plaf.basic.BasicSliderUI;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 
@@ -113,6 +116,7 @@ class FaceSwapPanel extends PluginPanel
 	private JDialog activeHeadPicker;
 	private boolean openingHeadPicker;
 	private boolean refreshing;
+	private int lastHeadPickerTabIndex = 1;
 
 	FaceSwapPanel(FaceSwapPlugin plugin, FaceSwapPanelState initialState)
 	{
@@ -606,7 +610,7 @@ class FaceSwapPanel extends PluginPanel
 		int availableHeads = 0;
 		for (FaceSwapHead head : orderedHeadsForPicker(category))
 		{
-			if (head.getCategory() != category || !plugin.isHeadAvailable(head))
+			if (!isHeadForPickerCategory(head, category) || !plugin.isHeadAvailable(head))
 			{
 				continue;
 			}
@@ -633,13 +637,112 @@ class FaceSwapPanel extends PluginPanel
 		return grid;
 	}
 
+	private JPanel customHeadPicker()
+	{
+		JPanel panel = new JPanel(new BorderLayout(0, 10));
+		panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		panel.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createTitledBorder(
+				BorderFactory.createLineBorder(ColorScheme.MEDIUM_GRAY_COLOR), "Custom Images"),
+			BorderFactory.createEmptyBorder(10, 10, 10, 10)));
+
+		JPanel controls = new JPanel(new BorderLayout(8, 0));
+		controls.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		JButton browseButton = new JButton("Browse...");
+		JTextArea status = new JTextArea(
+			"Preferred: transparent 512x512 PNG. JPG/BMP accepted; background removal is not automatic.");
+		status.setLineWrap(true);
+		status.setWrapStyleWord(true);
+		status.setRows(2);
+		status.setEditable(false);
+		status.setFocusable(false);
+		status.setOpaque(false);
+		status.setBorder(BorderFactory.createEmptyBorder());
+		status.setMinimumSize(new Dimension(0, 36));
+		status.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		controls.add(browseButton, BorderLayout.WEST);
+		controls.add(status, BorderLayout.CENTER);
+		panel.add(controls, BorderLayout.NORTH);
+
+		JPanel recents = new JPanel(new GridLayout(0, 2, 8, 8));
+		recents.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		for (FaceSwapCustomImageStore.Entry entry : plugin.getCustomImages())
+		{
+			BufferedImage image = plugin.getCustomImage(entry.id);
+			JButton imageButton = new JButton(new ImageIcon(createCustomThumbnail(image)));
+			imageButton.setToolTipText(entry.name);
+			imageButton.setPreferredSize(new Dimension(108, 108));
+			imageButton.addActionListener(event ->
+			{
+				plugin.selectCustomImage(entry.id);
+				closeActiveHeadPicker();
+			});
+			recents.add(imageButton);
+		}
+		if (plugin.getCustomImages().isEmpty())
+		{
+			JLabel empty = new JLabel("No local images imported yet", SwingConstants.CENTER);
+			empty.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			recents.add(empty);
+		}
+		panel.add(recents, BorderLayout.CENTER);
+
+		JButton clearButton = new JButton("Clear");
+		clearButton.setToolTipText("Remove all imported custom images and clear this panel");
+		clearButton.addActionListener(event -> plugin.clearCustomImages(this::refreshActiveHeadPicker));
+		panel.add(clearButton, BorderLayout.SOUTH);
+		browseButton.addActionListener(event -> browseForCustomImage(status));
+		return panel;
+	}
+
+	private void browseForCustomImage(JTextArea status)
+	{
+		JFileChooser chooser = new JFileChooser();
+		chooser.setDialogTitle("Choose a custom face image");
+		chooser.setFileFilter(new FileNameExtensionFilter("Image files (PNG, JPG, JPEG, BMP)", "png", "jpg", "jpeg", "bmp"));
+		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+		{
+			return;
+		}
+		status.setText("Importing...");
+		plugin.importCustomImage(chooser.getSelectedFile().toPath(), message ->
+		{
+			status.setText(message);
+			refreshActiveHeadPicker();
+		});
+	}
+
 	private JPanel createHeadPickerContent()
 	{
-		JPanel content = new JPanel(new GridLayout(1, 2, 12, 0));
+		JPanel content = new JPanel(new BorderLayout());
 		content.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 		content.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		content.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.FICTIONAL_CHARACTER)));
-		content.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.CONTENT_CREATOR)));
+		if (plugin.useTabbedHeadPicker())
+		{
+			JTabbedPane tabs = new JTabbedPane();
+			tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+			tabs.addTab("Fictional",
+				headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.FICTIONAL_CHARACTER)));
+			tabs.addTab(FaceSwapHeadCategory.CONTENT_CREATOR.toString(),
+				headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.CONTENT_CREATOR)));
+			tabs.addTab(FaceSwapHeadCategory.EMOJI.toString(),
+				headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.EMOJI)));
+			tabs.addTab(FaceSwapHeadCategory.CUSTOM.toString(),
+				headPickerScrollPane(customHeadPicker()));
+			tabs.addChangeListener(event -> lastHeadPickerTabIndex = tabs.getSelectedIndex());
+			tabs.setSelectedIndex(Math.max(0, Math.min(lastHeadPickerTabIndex, tabs.getTabCount() - 1)));
+			content.add(tabs, BorderLayout.CENTER);
+		}
+		else
+		{
+			JPanel columns = new JPanel(new GridLayout(1, 4, 12, 0));
+			columns.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			columns.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.FICTIONAL_CHARACTER)));
+			columns.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.CONTENT_CREATOR)));
+			columns.add(headPickerScrollPane(headPickerGrid(FaceSwapHeadCategory.EMOJI)));
+			columns.add(headPickerScrollPane(customHeadPicker()));
+			content.add(columns, BorderLayout.CENTER);
+		}
 		return content;
 	}
 
@@ -662,23 +765,49 @@ class FaceSwapPanel extends PluginPanel
 		{
 			addAll(ordered,
 				FaceSwapHead.ODABLOCK,
-				FaceSwapHead.FAUX_OSRS,
-				FaceSwapHead.FAUX,
-				FaceSwapHead.ALFIE,
 				FaceSwapHead.SARDACO,
+				FaceSwapHead.SKILL_SPECS,
+				FaceSwapHead.TASTYLIFE,
+				FaceSwapHead.TPAPASLICE,
+				FaceSwapHead.PRISONJOE,
+				FaceSwapHead.ZECOOKIES,
+				FaceSwapHead.ALFIE,
+				FaceSwapHead.FOX,
 				FaceSwapHead.KING_CONDOR,
 				FaceSwapHead.DEARLOLA,
-				FaceSwapHead.PRISONJOE,
-				FaceSwapHead.TPAPASLICE,
-				FaceSwapHead.ZECOOKIES,
+				FaceSwapHead.ELIOP14,
+				FaceSwapHead.JILLYFISH,
 				FaceSwapHead.BEGGAR,
 				FaceSwapHead.GRIM,
-				FaceSwapHead.TORVESTA,
-				FaceSwapHead.PURESPAM);
+				FaceSwapHead.ASIAN_ANDY,
+
+				FaceSwapHead.SARDACO_OSRS,
+				FaceSwapHead.SKILL_SPECS_OSRS,
+				FaceSwapHead.TASTYLIFE_OSRS,
+				FaceSwapHead.TPAPASLICE_OSRS,
+				FaceSwapHead.PRISONJOE_OSRS,
+				FaceSwapHead.ZECOOKIES_OSRS,
+				FaceSwapHead.ALFIE_OSRS,
+				FaceSwapHead.FOX_OSRS,
+				FaceSwapHead.KING_CONDOR_OSRS,
+				FaceSwapHead.DEARLOLA_OSRS,
+				FaceSwapHead.ELIOP14_OSRS,
+				FaceSwapHead.JILLYFISH_OSRS,
+				FaceSwapHead.BEGGAR_OSRS,
+				FaceSwapHead.GRIM_OSRS,
+				FaceSwapHead.ASIAN_ANDY_OSRS
+				);
 		}
 		else if (category == FaceSwapHeadCategory.FICTIONAL_CHARACTER)
 		{
 			addAll(ordered,
+				FaceSwapHead.PUG,
+				FaceSwapHead.HORSE,
+				FaceSwapHead.RABBIT,
+				FaceSwapHead.PENGUIN,
+				FaceSwapHead.CAT,
+				FaceSwapHead.MONKEY_PHOTO,
+				FaceSwapHead.CLOWN,
 				FaceSwapHead.ORANGE_PARKA,
 				FaceSwapHead.CLASSIC_ADVENTURER,
 				FaceSwapHead.PURPLE_DINOSAUR,
@@ -688,17 +817,43 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.AGENT,
 				FaceSwapHead.MONKEY,
 				FaceSwapHead.CHOSEN_ONE,
-				FaceSwapHead.MARTIAL_ARTIST);
+				FaceSwapHead.MARTIAL_ARTIST,
+				FaceSwapHead.BOSS);
+		}
+		else if (category == FaceSwapHeadCategory.EMOJI)
+		{
+			addAll(ordered,
+				FaceSwapHead.SMILEY,
+				FaceSwapHead.HEART_EYES,
+				FaceSwapHead.POOP,
+				FaceSwapHead.COOL,
+				FaceSwapHead.ANGRY,
+				FaceSwapHead.SAD,
+				FaceSwapHead.SURPRISED,
+				FaceSwapHead.HEART,
+				FaceSwapHead.ROBOT);
 		}
 
 		for (FaceSwapHead head : FaceSwapHead.values())
 		{
-			if (head.getCategory() == category && !ordered.contains(head))
+			if (category != FaceSwapHeadCategory.EMOJI
+				&& head.getCategory() == category && !ordered.contains(head))
 			{
 				ordered.add(head);
 			}
 		}
 		return ordered;
+	}
+
+	private static boolean isHeadForPickerCategory(FaceSwapHead head, FaceSwapHeadCategory category)
+	{
+		if (category == FaceSwapHeadCategory.CONTENT_CREATOR)
+		{
+			return head.getCategory() == FaceSwapHeadCategory.CONTENT_CREATOR
+				|| head.getCategory() == FaceSwapHeadCategory.CONTENT_CREATOR_3D;
+		}
+
+		return head.getCategory() == category;
 	}
 
 	private static void addAll(List<FaceSwapHead> heads, FaceSwapHead... entries)
@@ -719,7 +874,7 @@ class FaceSwapPanel extends PluginPanel
 			viewportContent,
 			JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
 			JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		scrollPane.setPreferredSize(new Dimension(300, 360));
+		scrollPane.setPreferredSize(new Dimension(360, 360));
 		scrollPane.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
 		scrollPane.setBorder(BorderFactory.createEmptyBorder());
 		scrollPane.getVerticalScrollBar().setUnitIncrement(16);
@@ -820,6 +975,11 @@ class FaceSwapPanel extends PluginPanel
 			int y = (PICKER_THUMBNAIL_SIZE - height) / 2;
 			graphics.drawImage(source, x, y, width, height, null);
 
+			if (head.getCategory() == FaceSwapHeadCategory.EMOJI)
+			{
+				return thumbnail;
+			}
+
 			if (head.isDebugOnly())
 			{
 				drawPickerLabel(graphics, "(Demo)", 0);
@@ -827,6 +987,48 @@ class FaceSwapPanel extends PluginPanel
 
 			int labelY = PICKER_THUMBNAIL_SIZE - PICKER_LABEL_HEIGHT;
 			drawPickerLabel(graphics, head.toString(), labelY);
+		}
+		finally
+		{
+			graphics.dispose();
+		}
+		return thumbnail;
+	}
+
+	private void refreshActiveHeadPicker()
+	{
+		if (activeHeadPicker == null)
+		{
+			return;
+		}
+		activeHeadPicker.setContentPane(createHeadPickerContent());
+		activeHeadPicker.pack();
+		activeHeadPicker.setLocationRelativeTo(this);
+		activeHeadPicker.revalidate();
+		activeHeadPicker.repaint();
+	}
+
+	private static BufferedImage createCustomThumbnail(BufferedImage source)
+	{
+		if (source == null)
+		{
+			return createPickerThumbnailUncached(FaceSwapHead.CUSTOM);
+		}
+		BufferedImage thumbnail = new BufferedImage(
+			PICKER_THUMBNAIL_SIZE, PICKER_THUMBNAIL_SIZE, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D graphics = thumbnail.createGraphics();
+		try
+		{
+			graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+			double scale = Math.min(
+				(double) PICKER_THUMBNAIL_SIZE / Math.max(1, source.getWidth()),
+				(double) PICKER_THUMBNAIL_SIZE / Math.max(1, source.getHeight()));
+			int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
+			int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
+			graphics.drawImage(source,
+				(PICKER_THUMBNAIL_SIZE - width) / 2,
+				(PICKER_THUMBNAIL_SIZE - height) / 2,
+				width, height, null);
 		}
 		finally
 		{

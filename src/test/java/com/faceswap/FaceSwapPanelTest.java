@@ -55,7 +55,6 @@ public class FaceSwapPanelTest
 			FaceSwapHead.PRISONJOE,
 			FaceSwapHead.ZECOOKIES,
 			FaceSwapHead.ALFIE,
-			FaceSwapHead.FOX,
 			FaceSwapHead.FOX_OSRS,
 			FaceSwapHead.KING_CONDOR,
 			FaceSwapHead.DEARLOLA,

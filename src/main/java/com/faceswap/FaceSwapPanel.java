@@ -772,7 +772,6 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.PRISONJOE,
 				FaceSwapHead.ZECOOKIES,
 				FaceSwapHead.ALFIE,
-				FaceSwapHead.FOX,
 				FaceSwapHead.KING_CONDOR,
 				FaceSwapHead.DEARLOLA,
 				FaceSwapHead.ELIOP14,

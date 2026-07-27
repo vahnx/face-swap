@@ -5,7 +5,6 @@ public enum FaceSwapHead
 	SARDACO("Sardaco", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	ASIAN_ANDY("Asian Andy", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	ODABLOCK("Odablock", FaceSwapHeadCategory.CONTENT_CREATOR, false, true),
-	FOX("Fox", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	FOX_OSRS("Fox (OSRS)", FaceSwapHeadCategory.CONTENT_CREATOR_3D, true, true),
 	GRIM("Grim", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	KING_CONDOR("King Condor", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),

@@ -66,10 +66,6 @@ public class FaceSwapReleaseAssetsTest
 	public void contentCreatorReleaseAssetsIncludeNewestReleaseHeads()
 	{
 		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/content_creators/fox_front.png") != null);
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/content_creators/fox_back.png") != null);
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
 			"/heads/content_creators_3d/fox_osrs_front.png") != null);
 		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
 			"/heads/content_creators_3d/fox_osrs_back.png") != null);

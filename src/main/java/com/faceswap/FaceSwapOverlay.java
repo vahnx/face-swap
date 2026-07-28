@@ -32,9 +32,9 @@ import net.runelite.api.Point;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.gameval.AnimationID;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.kit.KitType;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -427,16 +427,16 @@ class FaceSwapOverlay extends Overlay
 
 	private boolean isBlockedByInterface()
 	{
-		return isVisible(WidgetInfo.LOGIN_CLICK_TO_PLAY_SCREEN)
-			|| isVisible(WidgetInfo.BANK_CONTAINER)
-			|| isVisible(WidgetInfo.BANK_PIN_CONTAINER)
-			|| isVisible(WidgetInfo.GROUP_STORAGE_UI)
-			|| isVisible(WidgetInfo.DEPOSIT_BOX_INVENTORY_ITEMS_CONTAINER);
+		return isVisible(InterfaceID.WelcomeScreen.UNIVERSE)
+			|| isVisible(InterfaceID.Bankmain.UNIVERSE)
+			|| isVisible(InterfaceID.BankpinKeypad.UNIVERSE)
+			|| isVisible(InterfaceID.SharedBank.FRAME)
+			|| isVisible(InterfaceID.BankDepositbox.INVENTORY);
 	}
 
-	private boolean isVisible(WidgetInfo widgetInfo)
+	private boolean isVisible(int componentId)
 	{
-		Widget widget = client.getWidget(widgetInfo);
+		Widget widget = client.getWidget(componentId);
 		return widget != null && !widget.isHidden();
 	}
 

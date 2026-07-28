@@ -1,7 +1,6 @@
 package com.faceswap;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import net.runelite.client.config.ConfigItem;
@@ -111,16 +110,6 @@ public class FaceSwapConfigTest
 			FaceSwapPlugin.resolveMaskTrackingMode(true, MaskTrackingMode.MERGED_MODEL));
 		assertEquals(MaskTrackingMode.AUTO,
 			FaceSwapPlugin.resolveMaskTrackingMode(false, MaskTrackingMode.MERGED_MODEL));
-	}
-
-	@Test
-	public void detectsIdeDebuggerArguments()
-	{
-		assertTrue(FaceSwapPlugin.isDebuggerAttached(List.of(
-			"-ea",
-			"-agentlib:jdwp=transport=dt_socket,address=127.0.0.1:5005,suspend=y,server=n")));
-		assertTrue(FaceSwapPlugin.isDebuggerAttached(List.of("-Xrunjdwp:transport=dt_socket,server=y")));
-		assertFalse(FaceSwapPlugin.isDebuggerAttached(List.of("-ea", "-Xmx1g")));
 	}
 
 	@Test

@@ -12,7 +12,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -278,21 +277,9 @@ public class FaceSwapPlugin extends Plugin
 	@Provides
 	Config provideConfig(ConfigManager configManager, @Named("developerMode") boolean developerMode)
 	{
-		return developerMode && isDebuggerAttached(ManagementFactory.getRuntimeMXBean().getInputArguments())
+		return developerMode
 			? configManager.getConfig(FaceSwapConfig.class)
 			: configManager.getConfig(FaceSwapReleaseConfig.class);
-	}
-
-	static boolean isDebuggerAttached(Iterable<String> inputArguments)
-	{
-		for (String argument : inputArguments)
-		{
-			if (argument.contains("jdwp") || argument.startsWith("-Xrunjdwp"))
-			{
-				return true;
-			}
-		}
-		return false;
 	}
 
 	@Override
@@ -471,7 +458,7 @@ public class FaceSwapPlugin extends Plugin
 
 	private boolean isDebugLaunch()
 	{
-		return developerMode && isDebuggerAttached(ManagementFactory.getRuntimeMXBean().getInputArguments());
+		return developerMode;
 	}
 
 	FaceSwapRenderMode getRenderMode()

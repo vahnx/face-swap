@@ -16,9 +16,9 @@ item_ids,item_name,model_y,model_scale,model_x,model_z,model_pitch,model_yaw,mod
 29019;29041;29064;29845,Blue moon helm,15,96,0,-7,0,0,0,110,90,100,0,0,0,0,0,tested,Saved from live config on 2026-07-22
 11850;11851;13579;13580;13591;13592;13603;13604;13615;13616;13627;13628;13667;13668;21061;21063;24743;24745;25069;25071;27444;27446;30045;30047,Graceful hood,14,100,0,-9,0,0,0,97,90,120,0,0,0,0,0,tested,Saved from live config on 2026-07-22
 11665;20481;24185;26477;27007;33464;33466,Void melee helm,13,103,0,-7,0,0,0,100,100,110,0,0,0,0,0,tested,Saved from live config on 2026-07-22
-11663;20477;24183;26473;27005;33468;33470,Void mage helm,7,100,0,-9,0,0,0,100,100,100,0,0,20,0,0,tested,Mask calibration saved on 2026-07-23
+11663;20477;24183;26473;27005;33468;33470,Void mage helm,12,100,0,-8,0,0,0,100,100,120,0,0,20,0,0,tested,Saved from live config on 2026-07-27
 11664,Void ranger helm,13,103,0,-7,0,0,0,111,100,110,0,0,0,0,0,tested,Saved from live config on 2026-07-22
-1147,Rune med helm,14,100,-1,-7,0,0,0,105,77,120,0,0,0,0,0,tested,Saved from live config on 2026-07-22
+1147,Rune med helm,12,100,0,-8,0,0,0,100,100,120,0,0,0,0,0,tested,Saved from live config on 2026-07-27
 9733,Mind helmet,13,100,0,-9,0,0,0,103,85,100,0,0,0,0,0,tested,Saved from live config on 2026-07-22
 10941,Lumberjack hat,17,100,0,-10,0,0,0,110,85,107,0,-5,0,0,0,tested,Saved from live config on 2026-07-22
 6392,Menaphite purple hat,13,100,0,-9,0,0,0,110,85,100,0,0,0,0,0,tested,Saved from live config on 2026-07-22

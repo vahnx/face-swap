@@ -22,7 +22,7 @@ These rules apply to every generated face/head asset for this plugin.
 Creator assets must match the existing streamer assets in the destination folder: realistic, isolated cardboard-cutout portraits with natural photographic or digitally painted facial, hair, and skin detail.
 
 - Use a front-facing portrait for `front` assets and a straight-on rear head portrait for `back` assets.
-- Include the head plus a small, clean neck or upper-shoulder silhouette, with plain shirt or collar fabric covering the lower neck and any exposed top-shoulder area.
+- Include the head only. End the cutout cleanly at the jawline in front views and the hairline/nape in back views; do not include a neck, shoulders, shirt, or collar.
 - Keep the subject as one clean isolated cutout with natural contours and no scene, props, clothing logos, text, or other people.
 - Keep front and back assets at comparable scale and vertical placement.
 - Treat the result as a realistic portrait cutout, not a game-model render.
@@ -31,7 +31,7 @@ Every creator prompt must explicitly say:
 
 ```text
 Match the realistic cardboard-cutout portrait style of the existing streamer assets in the destination folder. Use natural photographic or digitally painted facial, hair, and skin detail. Do not create a low-poly, faceted, voxel, blocky, clay, cartoon, illustrated, or 3D game-model render. Do not add geometric facets or hard-surface modeling.
-Cover the lower neck and any exposed top-shoulder area with a small amount of plain shirt or collar fabric. Do not leave a bare lower-neck or bare shoulder cutout unless the approved reference asset specifically requires it.
+Keep the asset head-only. Do not include a lower neck, shoulders, shirt, or collar; terminate the transparent cutout cleanly at the jawline or hairline/nape.
 ```
 
 If the output looks faceted, low-poly, blocky, voxel-like, or like a 3D game model, discard it and regenerate it as a realistic portrait cutout. Do not post-process a block-style output into a creator asset.

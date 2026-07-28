@@ -26,6 +26,14 @@ public interface FaceSwapConfig extends Config
 	String FACE_MASK_SECTION = "faceMask";
 
 	@ConfigSection(
+		name = "Sidepanel",
+		description = "Face Swap sidepanel layout preferences",
+		position = 4,
+		closedByDefault = true
+	)
+	String SIDEPANEL_SECTION = "sidepanel";
+
+	@ConfigSection(
 		name = "3D Mode",
 		description = "3D model, helmet profile, and animation diagnostics",
 		position = 0
@@ -47,7 +55,8 @@ public interface FaceSwapConfig extends Config
 		keyName = "tabbedHeadPicker",
 		name = "Tabbed Head Picker",
 		description = "Displays the fictional, creator, and emoji choices in tabs instead of side-by-side columns.",
-		position = 0
+		position = 0,
+		section = SIDEPANEL_SECTION
 	)
 	default boolean tabbedHeadPicker()
 	{
@@ -789,7 +798,7 @@ public interface FaceSwapConfig extends Config
 	)
 	default int prototype3dY()
 	{
-		return 10;
+		return 6;
 	}
 
 	@ConfigItem(
@@ -837,7 +846,7 @@ public interface FaceSwapConfig extends Config
 	)
 	default int prototype3dZ()
 	{
-		return -9;
+		return -8;
 	}
 
 	@ConfigItem(
@@ -949,14 +958,46 @@ public interface FaceSwapConfig extends Config
 	)
 	default int prototype3dDepth()
 	{
+		return 120;
+	}
+
+	@ConfigItem(
+		keyName = "prototype3dBackDepth",
+		name = "3D Back Depth",
+		description = "Scales the rear half of the 3D head toward its center. Lower values make the back shallower.",
+		position = 17,
+		section = PROTOTYPE_3D_SECTION
+	)
+	@Range(
+		min = 50,
+		max = 200
+	)
+	default int prototype3dBackDepth()
+	{
 		return 100;
+	}
+
+	@ConfigItem(
+		keyName = "prototype3dChinHeight",
+		name = "3D Chin Height",
+		description = "Scales the lower chin region toward the bottom seam. Lower values make the chin shorter.",
+		position = 18,
+		section = PROTOTYPE_3D_SECTION
+	)
+	@Range(
+		min = 50,
+		max = 200
+	)
+	default int prototype3dChinHeight()
+	{
+		return 50;
 	}
 
 	@ConfigItem(
 		keyName = "prototypeAnimationFrameOffset",
 		name = "3D Animation Frame Offset",
 		description = "Advances or delays the replacement animation relative to the player.",
-		position = 17,
+		position = 19,
 		section = PROTOTYPE_3D_SECTION
 	)
 	@Range(

@@ -253,12 +253,17 @@ public class FaceSwapPlugin extends Plugin
 	private String lastPanelStatus;
 	private String lastPanelTargetNames;
 	private final AtomicBoolean panelRefreshQueued = new AtomicBoolean();
-	private final ExecutorService customImageExecutor = Executors.newSingleThreadExecutor(runnable ->
+	private ExecutorService customImageExecutor;
+
+	private static ExecutorService createCustomImageExecutor()
 	{
-		Thread thread = new Thread(runnable, "face-swap-custom-images");
-		thread.setDaemon(true);
-		return thread;
-	});
+		return Executors.newSingleThreadExecutor(runnable ->
+		{
+			Thread thread = new Thread(runnable, "face-swap-custom-images");
+			thread.setDaemon(true);
+			return thread;
+		});
+	}
 	private final FaceSwapCustomImageStore customImageStore = new FaceSwapCustomImageStore();
 	private volatile String radiusPlayerNames = "";
 	private volatile Map<String, FaceSwapHead> playerHeadAssignments;
@@ -293,6 +298,7 @@ public class FaceSwapPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		customImageExecutor = createCustomImageExecutor();
 		customImageExecutor.submit(() ->
 		{
 			customImageStore.load();
@@ -321,7 +327,11 @@ public class FaceSwapPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
-		customImageExecutor.shutdownNow();
+		if (customImageExecutor != null)
+		{
+			customImageExecutor.shutdownNow();
+			customImageExecutor = null;
+		}
 		FaceSwapHeadImages.setCustomImage(null);
 		pickPlayerMode = false;
 		hoveredPickActor = null;
@@ -583,13 +593,16 @@ public class FaceSwapPlugin extends Plugin
 		int textureWidthScale = clamp(config.prototype3dTextureWidth(), 50, 200);
 		int faceHeightScale = clamp(useHelmetProfile ? helmetProfile.getModelFaceHeight() : config.prototype3dFaceHeight(), 50, 200);
 		int depthScale = clamp(useHelmetProfile ? helmetProfile.getModelDepth() : config.prototype3dDepth(), 50, 200);
+		int backDepthScale = clamp(config.prototype3dBackDepth(), 50, 200);
+		int chinHeightScale = clamp(config.prototype3dChinHeight(), 50, 200);
 		FaceSwapTriangleCount triangleCount = getTriangleCount(assignedHead);
 		int animationFrameOffset = clamp(useHelmetProfile
 			? helmetProfile.getAnimationFrameOffset()
 			: config.prototypeAnimationFrameOffset(), -3, 3);
 		String modelKey = assignedHead.name() + ':' + height + ':' + scale + ':' + x + ':' + z + ':'
 			+ pitch + ':' + yaw + ':' + roll + ':' + widthScale + ':' + faceHeightScale + ':'
-			+ depthScale + ':' + textureWidthScale + ':' + triangleCount.name();
+			+ depthScale + ':' + backDepthScale + ':' + chinHeightScale + ':'
+			+ textureWidthScale + ':' + triangleCount.name();
 		Prototype3dInstance instance = prototype3dInstances.get(actor);
 		if (instance == null || !modelKey.equals(instance.modelKey))
 		{
@@ -598,7 +611,8 @@ public class FaceSwapPlugin extends Plugin
 			if (model == null)
 			{
 				model = createPrototype3dModel(height, scale, x, z, pitch, yaw, roll,
-					widthScale, faceHeightScale, depthScale, textureWidthScale,
+					widthScale, faceHeightScale, depthScale, backDepthScale, chinHeightScale,
+					textureWidthScale,
 					triangleCount, assignedHead);
 				if (model == null)
 				{
@@ -742,6 +756,8 @@ public class FaceSwapPlugin extends Plugin
 		}
 		else if ("dkMode".equals(event.getKey())
 			|| "prototype3dTextureWidth".equals(event.getKey())
+			|| "prototype3dBackDepth".equals(event.getKey())
+			|| "prototype3dChinHeight".equals(event.getKey())
 			|| HELMET_PROFILE_CONFIG_KEYS.contains(event.getKey()))
 		{
 			clientThread.invoke(() ->
@@ -1117,7 +1133,8 @@ public class FaceSwapPlugin extends Plugin
 	}
 
 	private Model createPrototype3dModel(int height, int scale, int x, int z, int pitch, int yaw, int roll,
-		int widthScale, int faceHeightScale, int depthScale, int textureWidthScale,
+		int widthScale, int faceHeightScale, int depthScale, int backDepthScale, int chinHeightScale,
+		int textureWidthScale,
 		FaceSwapTriangleCount triangleCount, FaceSwapHead selectedHead)
 	{
 		ModelData modelData = createDenseHeadModelData(triangleCount);
@@ -1194,11 +1211,19 @@ public class FaceSwapPlugin extends Plugin
 		float xFactor = scale / 100f * widthScale / 100f;
 		float yFactor = scale / 100f * faceHeightScale / 100f;
 		float zFactor = scale / 100f * depthScale / 100f;
+		float backFactor = backDepthScale / 100f;
+		float chinFactor = chinHeightScale / 100f;
+		float backHalfDepth = Math.max(1f, maxZ - transformCenterZ);
+		float headHeight = Math.max(1f, maxY - minY);
 		for (int vertex = 0; vertex < modelData.getVerticesCount(); vertex++)
 		{
+			float backWeight = smoothStep((verticesZ[vertex] - transformCenterZ) / backHalfDepth);
+			float chinWeight = smoothStep((verticesY[vertex] - minY) / headHeight);
+			float localZFactor = zFactor * lerp(1f, backFactor, backWeight);
+			float localYFactor = yFactor * lerp(1f, chinFactor, chinWeight);
 			verticesX[vertex] = transformCenterX + (verticesX[vertex] - transformCenterX) * xFactor + x;
-			verticesY[vertex] = transformBaseY + (verticesY[vertex] - transformBaseY) * yFactor - height;
-			verticesZ[vertex] = transformCenterZ + (verticesZ[vertex] - transformCenterZ) * zFactor + z;
+			verticesY[vertex] = transformBaseY + (verticesY[vertex] - transformBaseY) * localYFactor - height;
+			verticesZ[vertex] = transformCenterZ + (verticesZ[vertex] - transformCenterZ) * localZFactor + z;
 		}
 
 		ModelData[] rigParts = new ModelData[MALE_ANCHOR_MODEL_IDS.length * DENSE_ANCHOR_COPIES + 1];
@@ -3197,6 +3222,17 @@ public class FaceSwapPlugin extends Plugin
 	private static int clamp(int value, int min, int max)
 	{
 		return Math.max(min, Math.min(max, value));
+	}
+
+	private static float smoothStep(float value)
+	{
+		float t = Math.max(0f, Math.min(1f, value));
+		return t * t * (3f - 2f * t);
+	}
+
+	private static float lerp(float start, float end, float amount)
+	{
+		return start + (end - start) * amount;
 	}
 
 	private static BufferedImage createIcon()

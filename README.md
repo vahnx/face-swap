@@ -57,7 +57,7 @@ Have lots of fun!
 
 ## Usage
 
-Open the Face Swap sidepanel, choose a creator head, then use the Target button to select who the head should apply to.
+Open the Face Swap sidepanel, choose a creator head, then use the Target button to select who the head should apply to. 
 
 Render modes:
 

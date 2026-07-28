@@ -3,10 +3,19 @@ package com.faceswap;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
 
 @ConfigGroup("faceswap")
 public interface FaceSwapReleaseConfig extends Config
 {
+	@ConfigSection(
+		name = "Sidepanel",
+		description = "Face Swap sidepanel layout preferences",
+		position = 0,
+		closedByDefault = true
+	)
+	String SIDEPANEL_SECTION = "sidepanel";
+
 	@ConfigItem(
 		keyName = "selectedHead",
 		name = "Selected Head",
@@ -22,7 +31,8 @@ public interface FaceSwapReleaseConfig extends Config
 		keyName = "tabbedHeadPicker",
 		name = "Tabbed Head Picker",
 		description = "Displays the fictional, creator, and emoji choices in tabs instead of side-by-side columns.",
-		position = 0
+		position = 0,
+		section = SIDEPANEL_SECTION
 	)
 	default boolean tabbedHeadPicker()
 	{

@@ -77,6 +77,34 @@ python tools/normalize_head_assets.py src/main/resources/heads/fictional_charact
 
 The normalizer uses high-quality Lanczos resampling, preserves alpha, centers the visible content, and applies lossless PNG optimization. PNG DPI metadata is irrelevant; validate pixel dimensions instead.
 
+### Plugin Hub Size Optimization
+
+When the packaged plugin approaches the Plugin Hub size limit, recompress all tracked PNGs with `pngquant`. This is a separate release-size pass from the lossless normalizer above: `pngquant` is lossy and can substantially reduce indexed-color PNG sizes.
+
+From the repository root, run:
+
+```powershell
+git ls-files '*.png' | ForEach-Object {
+    pngquant --quality 65-85 --speed 1 --skip-if-larger --force --ext .png -- $_
+}
+```
+
+The options mean:
+
+- `--quality 65-85`: bounded lossy quality range; inspect the result visually.
+- `--speed 1`: prioritizes compression quality over processing speed.
+- `--skip-if-larger`: keeps the original when the optimized file would be larger.
+- `--force --ext .png`: replaces each file while preserving its path and filename.
+
+This preserves dimensions, alpha transparency, and code references, but it may reduce color precision through indexed-color quantization. Afterward, run the asset tests and build, inspect representative front/back assets and screenshots, and check the final JAR size.
+
+Historical result from the first size reduction pass:
+
+- Tracked PNGs: `23,989,598` bytes -> `7,021,286` bytes.
+- Total tracked repository files: `25,898,337` bytes -> `8,952,696` bytes.
+
+Do not delete assets or change resource paths as a size workaround. Revert any visually degraded asset individually and recheck the packaged artifact.
+
 If using another cleanup tool, verify:
 
 - The output has an alpha channel.

@@ -83,12 +83,3 @@ The private permission log records the creator name, approval date/time, platfor
 ## Submissions & Requests
 
 If you wish to have your face added,  submit feature requests, or other inquiries, email [osrsfaceswap@gmail.com](mailto:osrsfaceswap@gmail.com) or [open a GitHub issue](https://github.com/vahnx/face-swap/issues/new).
-
-## Support Development
-
-If you find this plugin useful and would like to support its continued development:
-
-- [Sponsor me on GitHub](https://github.com/sponsors/vahnx)
-- [Support me through PayPal](https://paypal.me/twitchplaying)
-
-Thank you for your support!

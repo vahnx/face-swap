@@ -1,6 +1,5 @@
 package com.faceswap;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.image.BufferedImage;
@@ -15,20 +14,11 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class FaceSwapPanelTest
 {
-	@Test
-	public void demoHeadsReceiveTopPickerBadge()
-	{
-		BufferedImage demo = FaceSwapPanel.createPickerThumbnail(FaceSwapHead.ODABLOCK);
-		BufferedImage release = FaceSwapPanel.createPickerThumbnail(FaceSwapHead.SARDACO);
-
-		assertEquals(Color.BLACK.getRGB(), demo.getRGB(2, 2));
-		assertNotEquals(Color.BLACK.getRGB(), release.getRGB(2, 2));
-	}
+	// Odablock's demo-thumbnail coverage is disabled while the head is commented out.
 
 	@Test
 	public void fictionalPickerPlacesNewHeadsFirstAndClownSeventh()
@@ -36,9 +26,9 @@ public class FaceSwapPanelTest
 		List<FaceSwapHead> heads = FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.FICTIONAL_CHARACTER);
 
 		assertEquals(FaceSwapHead.PUG, heads.get(0));
-		assertEquals(FaceSwapHead.CLOWN, heads.get(6));
-		assertTrue(heads.contains(FaceSwapHead.AGENT));
-		assertTrue(heads.contains(FaceSwapHead.MONKEY));
+		assertEquals(FaceSwapHead.CLASSIC_ADVENTURER, heads.get(6));
+		assertFalse(heads.stream().anyMatch(head -> head.name().equals("AGENT")));
+		assertFalse(heads.stream().anyMatch(head -> head.name().equals("MONKEY")));
 	}
 
 	@Test
@@ -47,7 +37,6 @@ public class FaceSwapPanelTest
 		List<FaceSwapHead> heads = FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.CONTENT_CREATOR);
 
 		FaceSwapHead[] expectedCreators = {
-			FaceSwapHead.ODABLOCK,
 			FaceSwapHead.SARDACO,
 			FaceSwapHead.SKILL_SPECS,
 			FaceSwapHead.TASTYLIFE,

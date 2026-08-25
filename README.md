@@ -92,4 +92,6 @@ If you find this plugin useful and would like to support its continued developme
 - [Support me through PayPal](https://paypal.me/twitchplaying)
 - Bitcoin: `bc1qnl9nvwldzzdnlglqhvlhdm5l04rxawgkezr2ru`
 
+Join the [vahnx Projects Discord](https://discord.gg/bn4HcQWTp) for general support, suggestions and project discussion.
+
 Thank you for your support!

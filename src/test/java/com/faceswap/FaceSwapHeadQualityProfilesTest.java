@@ -12,9 +12,9 @@ public class FaceSwapHeadQualityProfilesTest
 	{
 		Set<FaceSwapHead> changed = FaceSwapHeadQualityProfiles.findChangedHeads(
 			"SARDACO=TRIANGLES_4000,ALFIE=TRIANGLES_6000",
-			"SARDACO=TRIANGLES_4000,ALFIE=TRIANGLES_8000,AGENT=TRIANGLES_2000");
+			"SARDACO=TRIANGLES_4000,ALFIE=TRIANGLES_8000,PUG=TRIANGLES_2000");
 
-		assertEquals(Set.of(FaceSwapHead.ALFIE, FaceSwapHead.AGENT), changed);
+		assertEquals(Set.of(FaceSwapHead.ALFIE, FaceSwapHead.PUG), changed);
 	}
 
 	@Test
@@ -26,8 +26,8 @@ public class FaceSwapHeadQualityProfilesTest
 		assertEquals(Set.of(), changed);
 
 		changed = FaceSwapHeadQualityProfiles.findChangedHeads(
-			"AGENT=TRIANGLES_2000,SARDACO=TRIANGLES_4000",
-			"SARDACO=TRIANGLES_4000,AGENT=TRIANGLES_2000");
+			"PUG=TRIANGLES_2000,SARDACO=TRIANGLES_4000",
+			"SARDACO=TRIANGLES_4000,PUG=TRIANGLES_2000");
 		assertEquals(Set.of(), changed);
 	}
 }

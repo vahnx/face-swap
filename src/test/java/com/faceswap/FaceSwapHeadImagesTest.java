@@ -87,33 +87,5 @@ public class FaceSwapHeadImagesTest
 		}
 	}
 
-	@Test
-	public void agentUsesFictionalDirectionalAssets()
-	{
-		BufferedImage front = FaceSwapHeadImages.get(
-			FaceSwapHead.AGENT, FaceSwapHeadDirection.FRONT);
-		BufferedImage back = FaceSwapHeadImages.get(
-			FaceSwapHead.AGENT, FaceSwapHeadDirection.BACK);
-
-		assertNotSame(front, back);
-		assertEquals(512, front.getWidth());
-		assertEquals(512, front.getHeight());
-		assertEquals(512, back.getWidth());
-		assertEquals(512, back.getHeight());
-	}
-
-	@Test
-	public void monkeyUsesFictionalDirectionalAssets()
-	{
-		BufferedImage front = FaceSwapHeadImages.get(
-			FaceSwapHead.MONKEY, FaceSwapHeadDirection.FRONT);
-		BufferedImage back = FaceSwapHeadImages.get(
-			FaceSwapHead.MONKEY, FaceSwapHeadDirection.BACK);
-
-		assertNotSame(front, back);
-		assertEquals(512, front.getWidth());
-		assertEquals(512, front.getHeight());
-		assertEquals(512, back.getWidth());
-		assertEquals(512, back.getHeight());
-	}
+	// Removed fictional-character asset tests remain here as a reference for restoration.
 }

@@ -349,10 +349,10 @@ public class FaceSwapPlugin extends Plugin
 
 	private void migrateHeadNames()
 	{
-		migrateSelectedHeadName("JAMES_BOND", FaceSwapHead.AGENT);
-		migrateSelectedHeadName("DONKEY_KONG", FaceSwapHead.MONKEY);
-		migrateHeadTargetKeys("james_bond", "agent");
-		migrateHeadTargetKeys("donkey_kong", "monkey");
+		// migrateSelectedHeadName("JAMES_BOND", FaceSwapHead.AGENT);
+		// migrateSelectedHeadName("DONKEY_KONG", FaceSwapHead.MONKEY);
+		// migrateHeadTargetKeys("james_bond", "agent");
+		// migrateHeadTargetKeys("donkey_kong", "monkey");
 
 		String overrides = configManager.getConfiguration(CONFIG_GROUP, TRIANGLE_OVERRIDES_KEY);
 		String migratedOverrides = migrateHeadQualityOverrideNames(overrides);
@@ -409,13 +409,10 @@ public class FaceSwapPlugin extends Plugin
 			}
 			String headName = fields[0].trim();
 			boolean legacyName = true;
-			if ("JAMES_BOND".equals(headName))
+			if ("JAMES_BOND".equals(headName) || "DONKEY_KONG".equals(headName))
 			{
-				headName = FaceSwapHead.AGENT.name();
-			}
-			else if ("DONKEY_KONG".equals(headName))
-			{
-				headName = FaceSwapHead.MONKEY.name();
+				// Removed fictional-character aliases remain stale and are ignored below.
+				continue;
 			}
 			else
 			{

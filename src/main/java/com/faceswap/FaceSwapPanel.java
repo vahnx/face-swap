@@ -764,7 +764,7 @@ class FaceSwapPanel extends PluginPanel
 		if (category == FaceSwapHeadCategory.CONTENT_CREATOR)
 		{
 			addAll(ordered,
-				FaceSwapHead.ODABLOCK,
+				// FaceSwapHead.ODABLOCK,
 				FaceSwapHead.SARDACO,
 				FaceSwapHead.SKILL_SPECS,
 				FaceSwapHead.TASTYLIFE,
@@ -806,18 +806,19 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.PENGUIN,
 				FaceSwapHead.CAT,
 				FaceSwapHead.MONKEY_PHOTO,
-				FaceSwapHead.CLOWN,
-				FaceSwapHead.ORANGE_PARKA,
-				FaceSwapHead.CLASSIC_ADVENTURER,
-				FaceSwapHead.PURPLE_DINOSAUR,
-				FaceSwapHead.SPACE_MARINE,
-				FaceSwapHead.HALFLING,
-				FaceSwapHead.BANDICOOT,
-				FaceSwapHead.AGENT,
-				FaceSwapHead.MONKEY,
-				FaceSwapHead.CHOSEN_ONE,
-				FaceSwapHead.MARTIAL_ARTIST,
-				FaceSwapHead.BOSS);
+				// FaceSwapHead.CLOWN,
+				// FaceSwapHead.ORANGE_PARKA,
+				FaceSwapHead.CLASSIC_ADVENTURER
+				// FaceSwapHead.PURPLE_DINOSAUR,
+				// FaceSwapHead.SPACE_MARINE,
+				// FaceSwapHead.HALFLING,
+				// FaceSwapHead.BANDICOOT,
+				// FaceSwapHead.AGENT,
+				// FaceSwapHead.MONKEY,
+				// FaceSwapHead.CHOSEN_ONE,
+				// FaceSwapHead.MARTIAL_ARTIST,
+				// FaceSwapHead.BOSS
+				);
 		}
 		else if (category == FaceSwapHeadCategory.EMOJI)
 		{

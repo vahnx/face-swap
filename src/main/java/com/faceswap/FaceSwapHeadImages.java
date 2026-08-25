@@ -259,8 +259,8 @@ final class FaceSwapHeadImages
 		{
 			case KING_CONDOR:
 				return new Color(205, 160, 120);
-			case ODABLOCK:
-				return new Color(240, 170, 112);
+			// case ODABLOCK:
+			// 	return new Color(240, 170, 112);
 			case ALFIE:
 				return new Color(215, 185, 135);
 			case PURESPAM:

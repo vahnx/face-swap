@@ -21,7 +21,7 @@ public class FaceSwapPanelTest
 	// Odablock's demo-thumbnail coverage is disabled while the head is commented out.
 
 	@Test
-	public void fictionalPickerPlacesNewHeadsFirstAndClownSeventh()
+	public void fictionalPickerOrdering()
 	{
 		List<FaceSwapHead> heads = FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.FICTIONAL_CHARACTER);
 

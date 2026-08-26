@@ -20,6 +20,10 @@ public class FaceSwapTargetingTest
 			FaceSwapPlugin.targetNamesKey(FaceSwapHead.KING_CONDOR));
 		assertEquals("targetNames_alfie",
 			FaceSwapPlugin.targetNamesKey(FaceSwapHead.ALFIE));
+		assertEquals("targetStyles_alfie",
+			FaceSwapPlugin.targetStylesKey(FaceSwapHead.ALFIE));
+		assertEquals("npcTargetStyles_alfie",
+			FaceSwapPlugin.npcTargetStylesKey(FaceSwapHead.ALFIE));
 	}
 
 	@Test
@@ -34,6 +38,25 @@ public class FaceSwapTargetingTest
 	{
 		assertEquals("Chat Channel", FaceSwapTargetScope.CHAT_CHANNEL.toString());
 		assertEquals("Ignore List", FaceSwapTargetScope.IGNORE_LIST.toString());
+	}
+
+	@Test
+	public void parsesAndSerializesOptionalTargetStyles()
+	{
+		assertEquals("alternate", FaceSwapPlugin.parseTargetStyles(
+			"Alice=alternate,bob=default").get("alice"));
+		assertEquals("alice=alternate",
+			FaceSwapPlugin.serializeTargetStyles(FaceSwapPlugin.parseTargetStyles(
+				"Alice=alternate,bob=default")));
+	}
+
+	@Test
+	public void assignmentDefaultsToTheDefaultStyle()
+	{
+		FaceSwapAssignment assignment = FaceSwapAssignment.defaultStyle(FaceSwapHead.ALFIE);
+
+		assertEquals(FaceSwapHead.ALFIE, assignment.getHead());
+		assertEquals(FaceSwapAssignment.DEFAULT_STYLE_ID, assignment.getStyleId());
 	}
 
 	@Test

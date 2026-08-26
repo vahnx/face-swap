@@ -760,7 +760,7 @@ public interface FaceSwapConfig extends Config
 	@ConfigItem(
 		keyName = "saveHelmetPreset",
 		name = "3D Auto-save Helmet Preset",
-		description = "Developer-only: saves the equipped item's current 3D settings now and whenever calibration changes.",
+		description = "Developer-only: saves the equipped item's current 3D settings now and when numeric calibration changes; use Interactive Helmet Calibration's Save preset button for drag edits.",
 		position = 4,
 		section = PROTOTYPE_3D_SECTION
 	)
@@ -1007,5 +1007,17 @@ public interface FaceSwapConfig extends Config
 	default int prototypeAnimationFrameOffset()
 	{
 		return 0;
+	}
+
+	@ConfigItem(
+		keyName = "interactiveHelmetCalibration",
+		name = "Interactive Helmet Calibration",
+		description = "Developer-only: show draggable 3D calibration handles for the local player's equipped head item.",
+		position = 20,
+		section = PROTOTYPE_3D_SECTION
+	)
+	default boolean interactiveHelmetCalibration()
+	{
+		return false;
 	}
 }

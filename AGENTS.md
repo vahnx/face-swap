@@ -56,7 +56,7 @@ This file is split into shared RuneLite Plugin Hub guidance and repo-specific ov
 
 - Only read/write files inside the `.runelite` directory. Create a subdirectory for your plugin (e.g. `.runelite/your-plugin-name/`) if you need to store data on disk.
 - Use `RuneLite.RUNELITE_DIR` to get the path.
-- Alternatively, use `JFileChooser` for user-initiated file operations.
+- A user-initiated `JFileChooser` may read the explicitly selected source path for an import, then copy the result into the plugin-specific `.runelite` directory; do not scan or read arbitrary paths without user action.
 
 ## Config
 
@@ -135,7 +135,11 @@ These rules are specific to this repository and should be kept separate from the
 
 ## Local Persistence
 
-- Face Swap custom-image persistence must remain under `.runelite/face-swap/` or use a user-initiated `JFileChooser` operation.
+- Face Swap custom-image persistence must remain under `.runelite/face-swap/`. A user-initiated `JFileChooser` may select a source anywhere, but the plugin must copy the imported result into that directory and must not perform unprompted external reads.
+- `src/main/resources/helmet_profiles.csv` is packaged read-only default data. Runtime helmet-profile edits must use `.runelite/face-swap/helmet_profiles.csv`.
+- Runtime local 3D landmark offsets must use `.runelite/face-swap/helmet_mesh_calibration.csv`; keep the packaged profile CSV schema compatible.
+- Never derive runtime plugin paths from `user.dir` or assume that `src/main/resources` exists after Plugin Hub packaging.
+- Keep runtime file I/O off the client thread, including reads and writes triggered by developer calibration controls.
 - Config keys and helmet-profile formats are persistent interfaces; add migrations before changing names or column meanings.
 
 ## Verification

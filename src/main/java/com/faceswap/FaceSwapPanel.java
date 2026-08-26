@@ -650,7 +650,7 @@ class FaceSwapPanel extends PluginPanel
 		controls.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		JButton browseButton = new JButton("Browse...");
 		JTextArea status = new JTextArea(
-			"Preferred: transparent 512x512 PNG. JPG/BMP accepted; background removal is not automatic.");
+			"Choose an image from your computer. It will be copied into Face Swap storage. Preferred: transparent 512x512 PNG. JPG/BMP accepted; background removal is not automatic.");
 		status.setLineWrap(true);
 		status.setWrapStyleWord(true);
 		status.setRows(2);
@@ -697,7 +697,7 @@ class FaceSwapPanel extends PluginPanel
 
 	private void browseForCustomImage(JTextArea status)
 	{
-		JFileChooser chooser = new JFileChooser();
+		JFileChooser chooser = new JFileChooser(plugin.getCustomImageDirectory().toFile());
 		chooser.setDialogTitle("Choose a custom face image");
 		chooser.setFileFilter(new FileNameExtensionFilter("Image files (PNG, JPG, JPEG, BMP)", "png", "jpg", "jpeg", "bmp"));
 		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)

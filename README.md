@@ -7,7 +7,7 @@ Swap faces onto OSRS player or NPC models.
 - Pick from a selection of your favorite content creators
 - Target your player, friends, clanmates or anyone around you in-game to apply them
 - Apply them a 3D model or mask
-- Load your own creations from the local Face Swap data directory
+- Import your own photos to wear or apply to others
 
 ## Creators
 Current release creators:

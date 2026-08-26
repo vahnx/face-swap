@@ -7,16 +7,14 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -71,6 +69,7 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.input.KeyManager;
+import net.runelite.client.input.MouseManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
@@ -226,10 +225,16 @@ public class FaceSwapPlugin extends Plugin
 	@Inject
 	private KeyManager keyManager;
 
+	@Inject
+	private MouseManager mouseManager;
+
 	private FaceSwapConfig config;
 
 	@Inject
 	private FaceSwapOverlay overlay;
+
+	@Inject
+	private FaceSwapCalibrationOverlay calibrationOverlay;
 
 	@Inject
 	@Named("developerMode")
@@ -247,12 +252,15 @@ public class FaceSwapPlugin extends Plugin
 	private Model maskRigBaseModel;
 	private int prototype3dEquippedHeadItemId = Integer.MIN_VALUE;
 	private int prototype3dLiveCalibrationItemId = Integer.MIN_VALUE;
+	private int interactiveHelmetCalibrationItemId = Integer.MIN_VALUE;
+	private HelmetCalibration interactiveHelmetCalibration;
 	private int prototype3dDebugHeadItemId = Integer.MIN_VALUE;
 	private String prototype3dDebugHeadItemText;
 	private String lastPanelStatus;
 	private String lastPanelTargetNames;
 	private final AtomicBoolean panelRefreshQueued = new AtomicBoolean();
 	private ExecutorService customImageExecutor;
+	private FaceSwapCalibrationMouseListener calibrationMouseListener;
 
 	private static ExecutorService createCustomImageExecutor()
 	{
@@ -265,8 +273,8 @@ public class FaceSwapPlugin extends Plugin
 	}
 	private final FaceSwapCustomImageStore customImageStore = new FaceSwapCustomImageStore();
 	private volatile String radiusPlayerNames = "";
-	private volatile Map<String, FaceSwapHead> playerHeadAssignments;
-	private volatile Map<String, FaceSwapHead> npcHeadAssignments;
+	private volatile Map<String, FaceSwapAssignment> playerHeadAssignments;
+	private volatile Map<String, FaceSwapAssignment> npcHeadAssignments;
 
 	@Inject
 	void initializeInternalConfig(ConfigManager configManager)
@@ -289,7 +297,33 @@ public class FaceSwapPlugin extends Plugin
 		customImageExecutor.submit(() ->
 		{
 			customImageStore.load();
-			refreshPanel();
+			try
+			{
+				HelmetProfiles.loadRuntimeProfiles();
+			}
+			catch (IOException | RuntimeException ex)
+			{
+				log.debug("Unable to load runtime helmet profiles; using packaged defaults", ex);
+			}
+			try
+			{
+				HelmetMeshCalibrations.loadRuntime();
+			}
+			catch (IOException | RuntimeException ex)
+			{
+				log.debug("Unable to load runtime helmet mesh calibrations; using defaults", ex);
+			}
+			clientThread.invoke(() ->
+			{
+				if (config.interactiveHelmetCalibration())
+				{
+					ensureInteractiveHelmetCalibration(client.getLocalPlayer(),
+						getLocalHeadItemId(client.getLocalPlayer()));
+				}
+				clearPrototype3dModelCache();
+				removePrototype3dInstances();
+				refreshPanel();
+			});
 		});
 		migrateHeadNames();
 		migrateHelmetTextureLift();
@@ -306,8 +340,12 @@ public class FaceSwapPlugin extends Plugin
 
 		clientToolbar.addNavigation(navigationButton);
 		overlayManager.add(overlay);
+		overlayManager.add(calibrationOverlay);
 		hotkeyListener = new FaceSwapHotkeyListener(this);
 		keyManager.registerKeyListener(hotkeyListener);
+		calibrationMouseListener = new FaceSwapCalibrationMouseListener(this, calibrationOverlay);
+		mouseManager.registerMouseListener(calibrationMouseListener);
+		mouseManager.registerMouseWheelListener(calibrationMouseListener);
 		log.debug("Face Swap started");
 	}
 
@@ -327,6 +365,14 @@ public class FaceSwapPlugin extends Plugin
 			keyManager.unregisterKeyListener(hotkeyListener);
 			hotkeyListener = null;
 		}
+		if (calibrationMouseListener != null)
+		{
+			mouseManager.unregisterMouseListener(calibrationMouseListener);
+			mouseManager.unregisterMouseWheelListener(calibrationMouseListener);
+			calibrationMouseListener = null;
+		}
+		interactiveHelmetCalibration = null;
+		interactiveHelmetCalibrationItemId = Integer.MIN_VALUE;
 		removePrototype3dInstances();
 		removeMaskTrackingRigs();
 		if (clientToolbar != null && navigationButton != null)
@@ -336,6 +382,10 @@ public class FaceSwapPlugin extends Plugin
 		if (overlayManager != null && overlay != null)
 		{
 			overlayManager.remove(overlay);
+		}
+		if (overlayManager != null && calibrationOverlay != null)
+		{
+			overlayManager.remove(calibrationOverlay);
 		}
 		if (panel != null)
 		{
@@ -349,10 +399,10 @@ public class FaceSwapPlugin extends Plugin
 
 	private void migrateHeadNames()
 	{
-		migrateSelectedHeadName("JAMES_BOND", FaceSwapHead.AGENT);
-		migrateSelectedHeadName("DONKEY_KONG", FaceSwapHead.MONKEY);
-		migrateHeadTargetKeys("james_bond", "agent");
-		migrateHeadTargetKeys("donkey_kong", "monkey");
+		// migrateSelectedHeadName("JAMES_BOND", FaceSwapHead.AGENT);
+		// migrateSelectedHeadName("DONKEY_KONG", FaceSwapHead.MONKEY);
+		// migrateHeadTargetKeys("james_bond", "agent");
+		// migrateHeadTargetKeys("donkey_kong", "monkey");
 
 		String overrides = configManager.getConfiguration(CONFIG_GROUP, TRIANGLE_OVERRIDES_KEY);
 		String migratedOverrides = migrateHeadQualityOverrideNames(overrides);
@@ -409,13 +459,10 @@ public class FaceSwapPlugin extends Plugin
 			}
 			String headName = fields[0].trim();
 			boolean legacyName = true;
-			if ("JAMES_BOND".equals(headName))
+			if ("JAMES_BOND".equals(headName) || "DONKEY_KONG".equals(headName))
 			{
-				headName = FaceSwapHead.AGENT.name();
-			}
-			else if ("DONKEY_KONG".equals(headName))
-			{
-				headName = FaceSwapHead.MONKEY.name();
+				// Removed fictional-character aliases remain stale and are ignored below.
+				continue;
 			}
 			else
 			{
@@ -476,6 +523,137 @@ public class FaceSwapPlugin extends Plugin
 		return config.renderMode() == FaceSwapRenderMode.THREE_D;
 	}
 
+	boolean isInteractiveCalibrationActive()
+	{
+		Player player = client.getLocalPlayer();
+		return developerMode
+			&& config.interactiveHelmetCalibration()
+			&& isPrototype3dEnabled()
+			&& client.getGameState() == GameState.LOGGED_IN
+			&& player != null
+			&& interactiveHelmetCalibration != null
+			&& interactiveHelmetCalibrationItemId == getLocalHeadItemId(player)
+			&& getAssignedHead(player) != null
+			&& !hasFaceCoveringHeadgear(player);
+	}
+
+	HelmetCalibration getInteractiveCalibration()
+	{
+		return interactiveHelmetCalibration == null ? null : interactiveHelmetCalibration.copy();
+	}
+
+	boolean isCanvasEvent(MouseEvent event)
+	{
+		return event != null && client.getCanvas() != null && event.getComponent() == client.getCanvas();
+	}
+
+	private void ensureInteractiveHelmetCalibration(Player player, int headItemId)
+	{
+		if (!developerMode || !config.interactiveHelmetCalibration() || headItemId <= 0)
+		{
+			interactiveHelmetCalibration = null;
+			interactiveHelmetCalibrationItemId = Integer.MIN_VALUE;
+			return;
+		}
+		if (interactiveHelmetCalibrationItemId == headItemId && interactiveHelmetCalibration != null)
+		{
+			return;
+		}
+
+		interactiveHelmetCalibrationItemId = headItemId;
+		interactiveHelmetCalibration = HelmetCalibration.fromProfileOrConfig(
+			HelmetProfiles.find(headItemId), config);
+		interactiveHelmetCalibration.setMeshCalibration(HelmetMeshCalibrations.get(headItemId));
+		prototype3dLiveCalibrationItemId = headItemId;
+		clearPrototype3dModelCache();
+		removePrototype3dInstances();
+	}
+
+	void requestInteractiveDrag(CalibrationHandle handle, int deltaX, int deltaY)
+	{
+		clientThread.invoke(() ->
+		{
+			if (!isInteractiveCalibrationActive() || interactiveHelmetCalibration == null)
+			{
+				return;
+			}
+			interactiveHelmetCalibration.applyDrag(handle, deltaX, deltaY);
+			clearPrototype3dModelCache();
+			removePrototype3dInstances();
+		});
+	}
+
+	void requestInteractiveMeshDrag(MeshControlPoint point, float deltaX, float deltaY)
+	{
+		clientThread.invoke(() ->
+		{
+			if (!isInteractiveCalibrationActive() || interactiveHelmetCalibration == null)
+			{
+				return;
+			}
+			interactiveHelmetCalibration.applyMeshDrag(point, deltaX, deltaY);
+			clearPrototype3dModelCache();
+			removePrototype3dInstances();
+		});
+	}
+
+	void requestInteractiveMeshDepthAdjustment(MeshControlPoint point, int wheelRotation)
+	{
+		clientThread.invoke(() ->
+		{
+			if (!isInteractiveCalibrationActive() || interactiveHelmetCalibration == null)
+			{
+				return;
+			}
+			interactiveHelmetCalibration.adjustMeshDepth(point, wheelRotation);
+			clearPrototype3dModelCache();
+			removePrototype3dInstances();
+		});
+	}
+
+	void requestInteractiveZAdjustment(int wheelRotation)
+	{
+		clientThread.invoke(() ->
+		{
+			if (!isInteractiveCalibrationActive() || interactiveHelmetCalibration == null)
+			{
+				return;
+			}
+			interactiveHelmetCalibration.adjustZ(wheelRotation);
+			clearPrototype3dModelCache();
+			removePrototype3dInstances();
+		});
+	}
+
+	void requestSaveInteractiveHelmetPreset()
+	{
+		clientThread.invoke(() ->
+		{
+			if (isInteractiveCalibrationActive())
+			{
+				saveCurrentHelmetPreset();
+			}
+		});
+	}
+
+	void requestResetInteractiveHelmetCalibration()
+	{
+		clientThread.invoke(() ->
+		{
+			if (!isInteractiveCalibrationActive())
+			{
+				return;
+			}
+			int itemId = interactiveHelmetCalibrationItemId;
+			interactiveHelmetCalibration = HelmetCalibration.fromProfileOrConfig(
+				HelmetProfiles.find(itemId), config);
+			interactiveHelmetCalibration.setMeshCalibration(HelmetMeshCalibrations.get(itemId));
+			clearPrototype3dModelCache();
+			removePrototype3dInstances();
+			addDebugChatMessage("Reset interactive calibration for item " + itemId + ".");
+		});
+	}
+
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
 	{
@@ -518,7 +696,10 @@ public class FaceSwapPlugin extends Plugin
 		{
 			prototype3dEquippedHeadItemId = localHeadItemId;
 			prototype3dLiveCalibrationItemId = Integer.MIN_VALUE;
+			interactiveHelmetCalibrationItemId = Integer.MIN_VALUE;
+			interactiveHelmetCalibration = null;
 		}
+		ensureInteractiveHelmetCalibration(localPlayer, localHeadItemId);
 
 		Set<Actor> activeActors = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (Player player : client.getPlayers())
@@ -562,34 +743,50 @@ public class FaceSwapPlugin extends Plugin
 		}
 		boolean liveHelmetCalibration = player == localPlayer
 			&& (prototype3dLiveCalibrationItemId == headItemId
-				|| (developerMode && config.saveHelmetPreset()));
+				|| (developerMode && config.saveHelmetPreset())
+				|| interactiveHelmetCalibrationItemId == headItemId);
 		boolean useHelmetProfile = helmetProfile != null && helmetProfile.isTested() && !liveHelmetCalibration;
-		int calibratedHeight = useHelmetProfile ? helmetProfile.getModelY() : config.prototype3dY();
+		HelmetCalibration interactiveCalibration = player == localPlayer
+			&& interactiveHelmetCalibrationItemId == headItemId ? interactiveHelmetCalibration : null;
+		int calibratedHeight = interactiveCalibration != null ? interactiveCalibration.getY()
+			: useHelmetProfile ? helmetProfile.getModelY() : config.prototype3dY();
 		int globalYShift = resolvePrototypeGlobalYShift(headItemId > 0, config.prototype3dGlobalYShift());
 		int height = clamp(calibratedHeight - clamp(globalYShift, -32, 32), -128, 128);
 		boolean dkMode = config.dkMode();
 		int scale = clamp(dkMode ? 200
+			: interactiveCalibration != null ? interactiveCalibration.getScale()
 			: useHelmetProfile ? helmetProfile.getModelScale() : config.prototype3dScale(), 25, 250);
-		int x = clamp(useHelmetProfile ? helmetProfile.getModelX() : config.prototype3dX(), -128, 128);
-		int z = clamp(useHelmetProfile ? helmetProfile.getModelZ() : config.prototype3dZ(), -128, 128);
-		int pitch = clamp(useHelmetProfile ? helmetProfile.getModelPitch() : config.prototype3dPitch(), -180, 180);
-		int yaw = clamp(useHelmetProfile ? helmetProfile.getModelYaw() : config.prototype3dYaw(), -180, 180);
-		int roll = clamp(useHelmetProfile ? helmetProfile.getModelRoll() : config.prototype3dRoll(), -180, 180);
+		int x = clamp(interactiveCalibration != null ? interactiveCalibration.getX()
+			: useHelmetProfile ? helmetProfile.getModelX() : config.prototype3dX(), -128, 128);
+		int z = clamp(interactiveCalibration != null ? interactiveCalibration.getZ()
+			: useHelmetProfile ? helmetProfile.getModelZ() : config.prototype3dZ(), -128, 128);
+		int pitch = clamp(interactiveCalibration != null ? interactiveCalibration.getPitch()
+			: useHelmetProfile ? helmetProfile.getModelPitch() : config.prototype3dPitch(), -180, 180);
+		int yaw = clamp(interactiveCalibration != null ? interactiveCalibration.getYaw()
+			: useHelmetProfile ? helmetProfile.getModelYaw() : config.prototype3dYaw(), -180, 180);
+		int roll = clamp(interactiveCalibration != null ? interactiveCalibration.getRoll()
+			: useHelmetProfile ? helmetProfile.getModelRoll() : config.prototype3dRoll(), -180, 180);
 		int widthScale = clamp(dkMode ? 130
+			: interactiveCalibration != null ? interactiveCalibration.getWidth()
 			: useHelmetProfile ? helmetProfile.getModelWidth() : config.prototype3dWidth(), 50, 200);
 		int textureWidthScale = clamp(config.prototype3dTextureWidth(), 50, 200);
-		int faceHeightScale = clamp(useHelmetProfile ? helmetProfile.getModelFaceHeight() : config.prototype3dFaceHeight(), 50, 200);
-		int depthScale = clamp(useHelmetProfile ? helmetProfile.getModelDepth() : config.prototype3dDepth(), 50, 200);
+		int faceHeightScale = clamp(interactiveCalibration != null ? interactiveCalibration.getFaceHeight()
+			: useHelmetProfile ? helmetProfile.getModelFaceHeight() : config.prototype3dFaceHeight(), 50, 200);
+		int depthScale = clamp(interactiveCalibration != null ? interactiveCalibration.getDepth()
+			: useHelmetProfile ? helmetProfile.getModelDepth() : config.prototype3dDepth(), 50, 200);
 		int backDepthScale = clamp(config.prototype3dBackDepth(), 50, 200);
 		int chinHeightScale = clamp(config.prototype3dChinHeight(), 50, 200);
+		HelmetMeshCalibration meshCalibration = interactiveCalibration != null
+			? interactiveCalibration.getMeshCalibration()
+			: HelmetMeshCalibrations.get(headItemId);
 		FaceSwapTriangleCount triangleCount = getTriangleCount(assignedHead);
-		int animationFrameOffset = clamp(useHelmetProfile
-			? helmetProfile.getAnimationFrameOffset()
+		int animationFrameOffset = clamp(interactiveCalibration != null ? interactiveCalibration.getAnimationFrameOffset()
+			: useHelmetProfile ? helmetProfile.getAnimationFrameOffset()
 			: config.prototypeAnimationFrameOffset(), -3, 3);
 		String modelKey = assignedHead.name() + ':' + height + ':' + scale + ':' + x + ':' + z + ':'
 			+ pitch + ':' + yaw + ':' + roll + ':' + widthScale + ':' + faceHeightScale + ':'
 			+ depthScale + ':' + backDepthScale + ':' + chinHeightScale + ':'
-			+ textureWidthScale + ':' + triangleCount.name();
+			+ textureWidthScale + ':' + triangleCount.name() + meshCalibration.key();
 		Prototype3dInstance instance = prototype3dInstances.get(actor);
 		if (instance == null || !modelKey.equals(instance.modelKey))
 		{
@@ -600,7 +797,7 @@ public class FaceSwapPlugin extends Plugin
 				model = createPrototype3dModel(height, scale, x, z, pitch, yaw, roll,
 					widthScale, faceHeightScale, depthScale, backDepthScale, chinHeightScale,
 					textureWidthScale,
-					triangleCount, assignedHead);
+					triangleCount, assignedHead, meshCalibration);
 				if (model == null)
 				{
 					return;
@@ -685,11 +882,13 @@ public class FaceSwapPlugin extends Plugin
 			playerHeadAssignments = null;
 			npcHeadAssignments = null;
 		}
-		else if (event.getKey().startsWith("targetNames_"))
+		else if (event.getKey().startsWith("targetNames_")
+			|| event.getKey().startsWith("targetStyles_"))
 		{
 			playerHeadAssignments = null;
 		}
-		else if (event.getKey().startsWith("npcTargetNames_"))
+		else if (event.getKey().startsWith("npcTargetNames_")
+			|| event.getKey().startsWith("npcTargetStyles_"))
 		{
 			npcHeadAssignments = null;
 		}
@@ -713,6 +912,24 @@ public class FaceSwapPlugin extends Plugin
 		else if ("saveHelmetPreset".equals(event.getKey()) && Boolean.parseBoolean(event.getNewValue()))
 		{
 			clientThread.invoke(this::saveCurrentHelmetPreset);
+		}
+		else if ("interactiveHelmetCalibration".equals(event.getKey()))
+		{
+			clientThread.invoke(() ->
+			{
+				if (config.interactiveHelmetCalibration())
+				{
+					ensureInteractiveHelmetCalibration(client.getLocalPlayer(),
+						getLocalHeadItemId(client.getLocalPlayer()));
+				}
+				else
+				{
+					interactiveHelmetCalibration = null;
+					interactiveHelmetCalibrationItemId = Integer.MIN_VALUE;
+				}
+				clearPrototype3dModelCache();
+				removePrototype3dInstances();
+			});
 		}
 		else if (HELMET_PROFILE_CONFIG_KEYS.contains(event.getKey()))
 		{
@@ -745,7 +962,8 @@ public class FaceSwapPlugin extends Plugin
 			|| "prototype3dTextureWidth".equals(event.getKey())
 			|| "prototype3dBackDepth".equals(event.getKey())
 			|| "prototype3dChinHeight".equals(event.getKey())
-			|| HELMET_PROFILE_CONFIG_KEYS.contains(event.getKey()))
+			|| HELMET_PROFILE_CONFIG_KEYS.contains(event.getKey())
+			|| "interactiveHelmetCalibration".equals(event.getKey()))
 		{
 			clientThread.invoke(() ->
 			{
@@ -863,37 +1081,61 @@ public class FaceSwapPlugin extends Plugin
 			return;
 		}
 
-		Path projectRoot = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
-		Path csvPath = projectRoot.resolve("src/main/resources/helmet_profiles.csv").normalize();
-		if (!csvPath.startsWith(projectRoot) || !Files.isRegularFile(projectRoot.resolve("build.gradle"))
-			|| !Files.isRegularFile(csvPath))
+		ItemComposition itemComposition = client.getItemDefinition(itemId);
+		String itemName = itemComposition == null ? "Unknown item" : sanitizeCsvText(itemComposition.getName());
+		HelmetCalibration calibration = interactiveHelmetCalibrationItemId == itemId
+			&& interactiveHelmetCalibration != null
+			? interactiveHelmetCalibration.copy()
+			: HelmetCalibration.fromConfig(config);
+		if (interactiveHelmetCalibrationItemId != itemId || interactiveHelmetCalibration == null)
 		{
-			addDebugChatMessage("Helmet preset CSV was not found in the active source checkout.");
+			calibration.setMeshCalibration(HelmetMeshCalibrations.get(itemId));
+		}
+		HelmetPresetData preset = new HelmetPresetData(
+			itemId,
+			itemName,
+			calibration.getY(),
+			calibration.getScale(),
+			calibration.getX(),
+			calibration.getZ(),
+			calibration.getPitch(),
+			calibration.getYaw(),
+			calibration.getRoll(),
+			calibration.getWidth(),
+			calibration.getFaceHeight(),
+			calibration.getDepth(),
+			calibration.getAnimationFrameOffset(),
+			config.maskAngle(),
+			config.maskYaw(),
+			config.maskRoll(),
+			calibration.getMeshCalibration());
+
+		ExecutorService executor = customImageExecutor;
+		if (executor == null)
+		{
+			addDebugChatMessage("Unable to save helmet preset while the plugin is stopped.");
 			return;
 		}
+		executor.submit(() -> saveHelmetPreset(preset));
+	}
 
+	private void saveHelmetPreset(HelmetPresetData preset)
+	{
 		try
 		{
-			List<String> lines = new ArrayList<>(Files.readAllLines(csvPath, StandardCharsets.UTF_8));
-			if (lines.isEmpty() || !HelmetProfiles.HEADER.equals(lines.get(0)))
-			{
-				throw new IOException("Unexpected helmet profile header");
-			}
-
-			ItemComposition itemComposition = client.getItemDefinition(itemId);
-			String itemName = itemComposition == null ? "Unknown item" : sanitizeCsvText(itemComposition.getName());
-			int row = findHelmetProfileRow(lines, itemId);
+			List<String> lines = HelmetProfiles.readProfileLines();
+			int row = findHelmetProfileRow(lines, preset.itemId);
 			String[] existingValues = row < 0 ? null : lines.get(row).split(",", -1);
-			String itemIds = row < 0 ? Integer.toString(itemId) : existingValues[0];
+			String itemIds = row < 0 ? Integer.toString(preset.itemId) : existingValues[0];
 			String maskY = row < 0 ? "0" : existingValues[13];
 			String maskPitch = resolveSavedMaskCalibration(
-				config.maskAngle(), row < 0 ? "0" : existingValues[14]);
+				preset.maskAngle, row < 0 ? "0" : existingValues[14]);
 			String maskYaw = resolveSavedMaskCalibration(
-				config.maskYaw(), row < 0 ? "0" : existingValues[15]);
+				preset.maskYaw, row < 0 ? "0" : existingValues[15]);
 			String maskRoll = resolveSavedMaskCalibration(
-				config.maskRoll(), row < 0 ? "0" : existingValues[16]);
+				preset.maskRoll, row < 0 ? "0" : existingValues[16]);
 			String profile = buildHelmetProfileRow(
-				itemIds, itemName, maskY, maskPitch, maskYaw, maskRoll);
+				preset, itemIds, maskY, maskPitch, maskYaw, maskRoll);
 			if (row < 0)
 			{
 				lines.add(profile);
@@ -903,13 +1145,19 @@ public class FaceSwapPlugin extends Plugin
 				lines.set(row, profile);
 			}
 
-			writeHelmetProfilesAtomically(csvPath, lines);
-			addDebugChatMessage("Saved helmet preset for " + itemName + " (" + itemId + "). Restart the plugin to load it.");
+			HelmetProfiles.writeRuntimeProfiles(lines);
+			HelmetMeshCalibrations.save(preset.itemId, preset.meshCalibration);
+			clientThread.invoke(() ->
+			{
+				clearPrototype3dModelCache();
+				removePrototype3dInstances();
+				addDebugChatMessage("Saved helmet preset for " + preset.itemName + " (" + preset.itemId + ").");
+			});
 		}
-		catch (IOException ex)
+		catch (IOException | RuntimeException ex)
 		{
 			log.debug("Unable to save helmet preset", ex);
-			addDebugChatMessage("Unable to save helmet preset: " + ex.getMessage());
+			clientThread.invoke(() -> addDebugChatMessage("Unable to save helmet preset: " + ex.getMessage()));
 		}
 	}
 
@@ -937,9 +1185,9 @@ public class FaceSwapPlugin extends Plugin
 		return configuredValue == 0 ? existingValue : Integer.toString(configuredValue);
 	}
 
-	private String buildHelmetProfileRow(
+	private static String buildHelmetProfileRow(
+		HelmetPresetData preset,
 		String itemIds,
-		String itemName,
 		String maskY,
 		String maskPitch,
 		String maskYaw,
@@ -947,18 +1195,18 @@ public class FaceSwapPlugin extends Plugin
 	{
 		return String.join(",",
 			itemIds,
-			itemName,
-			Integer.toString(config.prototype3dY()),
-			Integer.toString(config.prototype3dScale()),
-			Integer.toString(config.prototype3dX()),
-			Integer.toString(config.prototype3dZ()),
-			Integer.toString(config.prototype3dPitch()),
-			Integer.toString(config.prototype3dYaw()),
-			Integer.toString(config.prototype3dRoll()),
-			Integer.toString(config.prototype3dWidth()),
-			Integer.toString(config.prototype3dFaceHeight()),
-			Integer.toString(config.prototype3dDepth()),
-			Integer.toString(config.prototypeAnimationFrameOffset()),
+			preset.itemName,
+			Integer.toString(preset.prototype3dY),
+			Integer.toString(preset.prototype3dScale),
+			Integer.toString(preset.prototype3dX),
+			Integer.toString(preset.prototype3dZ),
+			Integer.toString(preset.prototype3dPitch),
+			Integer.toString(preset.prototype3dYaw),
+			Integer.toString(preset.prototype3dRoll),
+			Integer.toString(preset.prototype3dWidth),
+			Integer.toString(preset.prototype3dFaceHeight),
+			Integer.toString(preset.prototype3dDepth),
+			Integer.toString(preset.prototypeAnimationFrameOffset),
 			maskY,
 			maskPitch,
 			maskYaw,
@@ -972,24 +1220,62 @@ public class FaceSwapPlugin extends Plugin
 		return value.replace(',', ' ').replace('\r', ' ').replace('\n', ' ').trim();
 	}
 
-	private static void writeHelmetProfilesAtomically(Path csvPath, List<String> lines) throws IOException
+	private static final class HelmetPresetData
 	{
-		Path temporary = Files.createTempFile(csvPath.getParent(), "helmet_profiles", ".tmp");
-		try
+		private final int itemId;
+		private final String itemName;
+		private final int prototype3dY;
+		private final int prototype3dScale;
+		private final int prototype3dX;
+		private final int prototype3dZ;
+		private final int prototype3dPitch;
+		private final int prototype3dYaw;
+		private final int prototype3dRoll;
+		private final int prototype3dWidth;
+		private final int prototype3dFaceHeight;
+		private final int prototype3dDepth;
+		private final int prototypeAnimationFrameOffset;
+		private final int maskAngle;
+		private final int maskYaw;
+		private final int maskRoll;
+		private final HelmetMeshCalibration meshCalibration;
+
+		private HelmetPresetData(
+			int itemId,
+			String itemName,
+			int prototype3dY,
+			int prototype3dScale,
+			int prototype3dX,
+			int prototype3dZ,
+			int prototype3dPitch,
+			int prototype3dYaw,
+			int prototype3dRoll,
+			int prototype3dWidth,
+			int prototype3dFaceHeight,
+			int prototype3dDepth,
+			int prototypeAnimationFrameOffset,
+			int maskAngle,
+			int maskYaw,
+			int maskRoll,
+			HelmetMeshCalibration meshCalibration)
 		{
-			Files.write(temporary, lines, StandardCharsets.UTF_8);
-			try
-			{
-				Files.move(temporary, csvPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-			}
-			catch (AtomicMoveNotSupportedException ex)
-			{
-				Files.move(temporary, csvPath, StandardCopyOption.REPLACE_EXISTING);
-			}
-		}
-		finally
-		{
-			Files.deleteIfExists(temporary);
+			this.itemId = itemId;
+			this.itemName = itemName;
+			this.prototype3dY = prototype3dY;
+			this.prototype3dScale = prototype3dScale;
+			this.prototype3dX = prototype3dX;
+			this.prototype3dZ = prototype3dZ;
+			this.prototype3dPitch = prototype3dPitch;
+			this.prototype3dYaw = prototype3dYaw;
+			this.prototype3dRoll = prototype3dRoll;
+			this.prototype3dWidth = prototype3dWidth;
+			this.prototype3dFaceHeight = prototype3dFaceHeight;
+			this.prototype3dDepth = prototype3dDepth;
+			this.prototypeAnimationFrameOffset = prototypeAnimationFrameOffset;
+			this.maskAngle = maskAngle;
+			this.maskYaw = maskYaw;
+			this.maskRoll = maskRoll;
+			this.meshCalibration = meshCalibration == null ? new HelmetMeshCalibration() : meshCalibration.copy();
 		}
 	}
 
@@ -1122,9 +1408,9 @@ public class FaceSwapPlugin extends Plugin
 	private Model createPrototype3dModel(int height, int scale, int x, int z, int pitch, int yaw, int roll,
 		int widthScale, int faceHeightScale, int depthScale, int backDepthScale, int chinHeightScale,
 		int textureWidthScale,
-		FaceSwapTriangleCount triangleCount, FaceSwapHead selectedHead)
+		FaceSwapTriangleCount triangleCount, FaceSwapHead selectedHead, HelmetMeshCalibration meshCalibration)
 	{
-		ModelData modelData = createDenseHeadModelData(triangleCount);
+		ModelData modelData = createDenseHeadModelData(triangleCount, meshCalibration);
 		if (modelData == null)
 		{
 			ModelData headModelData = clonePrototypeModel(RIGGED_HEAD_MODEL_ID);
@@ -1277,7 +1563,8 @@ public class FaceSwapPlugin extends Plugin
 		return modelData;
 	}
 
-	private ModelData createDenseHeadModelData(FaceSwapTriangleCount triangleCount)
+	private ModelData createDenseHeadModelData(FaceSwapTriangleCount triangleCount,
+		HelmetMeshCalibration meshCalibration)
 	{
 		int donorCopies = triangleCount.getDonorCopies();
 		int headSegments = triangleCount.getSegments();
@@ -1339,6 +1626,10 @@ public class FaceSwapPlugin extends Plugin
 		}
 		int bottomVertex = vertex;
 		logicalY[vertex] = -164f;
+		if (meshCalibration != null)
+		{
+			meshCalibration.applyTo(logicalX, logicalY, logicalZ);
+		}
 		int[] logicalToPhysical = createDenseHeadVertexMap(requiredVertices, bottomVertex,
 			donorCopies, headSegments, headRings);
 		for (int logicalVertex = 0; logicalVertex < requiredVertices; logicalVertex++)
@@ -2219,6 +2510,12 @@ public class FaceSwapPlugin extends Plugin
 
 	FaceSwapHead getAssignedHead(Player player)
 	{
+		FaceSwapAssignment assignment = getAssignedAssignment(player);
+		return assignment == null ? null : assignment.getHead();
+	}
+
+	FaceSwapAssignment getAssignedAssignment(Player player)
+	{
 		if (player == null)
 		{
 			return null;
@@ -2266,10 +2563,16 @@ public class FaceSwapPlugin extends Plugin
 				matches = false;
 				break;
 		}
-		return matches ? getEffectiveSelectedHead() : null;
+		return matches ? FaceSwapAssignment.defaultStyle(getEffectiveSelectedHead()) : null;
 	}
 
 	FaceSwapHead getAssignedHead(NPC npc)
+	{
+		FaceSwapAssignment assignment = getAssignedAssignment(npc);
+		return assignment == null ? null : assignment.getHead();
+	}
+
+	FaceSwapAssignment getAssignedAssignment(NPC npc)
 	{
 		if (npc == null || npc.getName() == null)
 		{
@@ -2278,7 +2581,7 @@ public class FaceSwapPlugin extends Plugin
 		switch (config.npcTargetScope())
 		{
 			case ALL_NPCS:
-				return getEffectiveSelectedHead();
+				return FaceSwapAssignment.defaultStyle(getEffectiveSelectedHead());
 			case SPECIFIC_NPCS:
 				String npcName = normalizePlayerName(npc.getName());
 				return getNpcHeadAssignments().get(npcName);
@@ -2585,9 +2888,19 @@ public class FaceSwapPlugin extends Plugin
 		return customImageStore.getRecents();
 	}
 
+	Path getCustomImageDirectory()
+	{
+		return customImageStore.getDirectory();
+	}
+
 	BufferedImage getCustomImage(String id)
 	{
 		return customImageStore.getImage(id);
+	}
+
+	BufferedImage getSelectedCustomImage()
+	{
+		return customImageStore.getSelectedImage();
 	}
 
 	void importCustomImage(java.nio.file.Path source, Consumer<String> callback)
@@ -2688,6 +3001,8 @@ public class FaceSwapPlugin extends Plugin
 		FaceSwapHead selectedHead = getEffectiveSelectedHead();
 		String normalizedNames = normalizeTargetNames(targetNames);
 		Set<String> assignedNames = parseTargetNames(normalizedNames).keySet();
+		Set<String> removedNames = new java.util.HashSet<>(getConfiguredTargetNames(selectedHead));
+		removedNames.removeAll(assignedNames);
 		if (!assignedNames.isEmpty())
 		{
 			for (FaceSwapHead head : FaceSwapHead.values())
@@ -2701,10 +3016,12 @@ public class FaceSwapPlugin extends Plugin
 				{
 					configManager.setConfiguration(CONFIG_GROUP, targetNamesKey(head),
 						String.join("\n", otherNames.values()));
+					removeTargetStyles(head, assignedNames, false);
 				}
 			}
 		}
 		configManager.setConfiguration(CONFIG_GROUP, targetNamesKey(selectedHead), normalizedNames);
+		removeTargetStyles(selectedHead, removedNames, false);
 		refreshPanel();
 	}
 
@@ -2725,6 +3042,8 @@ public class FaceSwapPlugin extends Plugin
 		FaceSwapHead selectedHead = getEffectiveSelectedHead();
 		String normalizedNames = normalizeTargetNames(targetNames);
 		Set<String> assignedNames = parseTargetNames(normalizedNames).keySet();
+		Set<String> removedNames = new java.util.HashSet<>(getConfiguredNpcTargetNames(selectedHead));
+		removedNames.removeAll(assignedNames);
 		if (!assignedNames.isEmpty())
 		{
 			for (FaceSwapHead head : FaceSwapHead.values())
@@ -2738,11 +3057,23 @@ public class FaceSwapPlugin extends Plugin
 				{
 					configManager.setConfiguration(CONFIG_GROUP, npcTargetNamesKey(head),
 						String.join("\n", otherNames.values()));
+					removeTargetStyles(head, assignedNames, true);
 				}
 			}
 		}
 		configManager.setConfiguration(CONFIG_GROUP, npcTargetNamesKey(selectedHead), normalizedNames);
+		removeTargetStyles(selectedHead, removedNames, true);
 		refreshPanel();
+	}
+
+	private void removeTargetStyles(FaceSwapHead head, Set<String> names, boolean npc)
+	{
+		String key = npc ? npcTargetStylesKey(head) : targetStylesKey(head);
+		Map<String, String> styles = parseTargetStyles(configManager.getConfiguration(CONFIG_GROUP, key));
+		if (styles.keySet().removeAll(names))
+		{
+			configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetStyles(styles));
+		}
 	}
 
 	private void assignNpcToHead(String npcName, FaceSwapHead head)
@@ -3024,15 +3355,22 @@ public class FaceSwapPlugin extends Plugin
 		return parseTargetNames(getTargetNames(head)).keySet();
 	}
 
-	private Map<String, FaceSwapHead> getPlayerHeadAssignments()
+	private FaceSwapAssignment createConfiguredAssignment(FaceSwapHead head, String name, boolean npc)
 	{
-		Map<String, FaceSwapHead> assignments = playerHeadAssignments;
+		String styles = configManager.getConfiguration(CONFIG_GROUP,
+			npc ? npcTargetStylesKey(head) : targetStylesKey(head));
+		return new FaceSwapAssignment(head, parseTargetStyles(styles).get(name));
+	}
+
+	private Map<String, FaceSwapAssignment> getPlayerHeadAssignments()
+	{
+		Map<String, FaceSwapAssignment> assignments = playerHeadAssignments;
 		if (assignments != null)
 		{
 			return assignments;
 		}
 
-		Map<String, FaceSwapHead> rebuilt = new HashMap<>();
+		Map<String, FaceSwapAssignment> rebuilt = new HashMap<>();
 		FaceSwapHead selectedHead = getEffectiveSelectedHead();
 		for (FaceSwapHead head : FaceSwapHead.values())
 		{
@@ -3042,12 +3380,12 @@ public class FaceSwapPlugin extends Plugin
 			}
 			for (String name : getConfiguredTargetNames(head))
 			{
-				rebuilt.putIfAbsent(name, head);
+				rebuilt.putIfAbsent(name, createConfiguredAssignment(head, name, false));
 			}
 		}
 		for (String name : getConfiguredTargetNames(selectedHead))
 		{
-			rebuilt.put(name, selectedHead);
+			rebuilt.put(name, createConfiguredAssignment(selectedHead, name, false));
 		}
 		assignments = Collections.unmodifiableMap(rebuilt);
 		playerHeadAssignments = assignments;
@@ -3082,15 +3420,60 @@ public class FaceSwapPlugin extends Plugin
 		return parseTargetNames(getNpcTargetNames(head)).keySet();
 	}
 
-	private Map<String, FaceSwapHead> getNpcHeadAssignments()
+	void setPlayerAssignmentStyle(String playerName, FaceSwapHead head, String styleId)
 	{
-		Map<String, FaceSwapHead> assignments = npcHeadAssignments;
+		setAssignmentStyle(playerName, head, styleId, false);
+	}
+
+	void setNpcAssignmentStyle(String npcName, FaceSwapHead head, String styleId)
+	{
+		setAssignmentStyle(npcName, head, styleId, true);
+	}
+
+	private void setAssignmentStyle(String name, FaceSwapHead head, String styleId, boolean npc)
+	{
+		if (head == null)
+		{
+			return;
+		}
+		String normalizedName = normalizePlayerName(name);
+		Set<String> configuredNames = npc ? getConfiguredNpcTargetNames(head) : getConfiguredTargetNames(head);
+		if (!configuredNames.contains(normalizedName))
+		{
+			return;
+		}
+
+		String key = npc ? npcTargetStylesKey(head) : targetStylesKey(head);
+		Map<String, String> styles = parseTargetStyles(configManager.getConfiguration(CONFIG_GROUP, key));
+		String normalizedStyleId = FaceSwapAssignment.normalizeStyleId(styleId);
+		if (FaceSwapAssignment.DEFAULT_STYLE_ID.equals(normalizedStyleId))
+		{
+			styles.remove(normalizedName);
+		}
+		else
+		{
+			styles.put(normalizedName, normalizedStyleId);
+		}
+		configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetStyles(styles));
+		if (npc)
+		{
+			npcHeadAssignments = null;
+		}
+		else
+		{
+			playerHeadAssignments = null;
+		}
+	}
+
+	private Map<String, FaceSwapAssignment> getNpcHeadAssignments()
+	{
+		Map<String, FaceSwapAssignment> assignments = npcHeadAssignments;
 		if (assignments != null)
 		{
 			return assignments;
 		}
 
-		Map<String, FaceSwapHead> rebuilt = new HashMap<>();
+		Map<String, FaceSwapAssignment> rebuilt = new HashMap<>();
 		FaceSwapHead selectedHead = getEffectiveSelectedHead();
 		for (FaceSwapHead head : FaceSwapHead.values())
 		{
@@ -3100,12 +3483,12 @@ public class FaceSwapPlugin extends Plugin
 			}
 			for (String name : getConfiguredNpcTargetNames(head))
 			{
-				rebuilt.putIfAbsent(name, head);
+				rebuilt.putIfAbsent(name, createConfiguredAssignment(head, name, true));
 			}
 		}
 		for (String name : getConfiguredNpcTargetNames(selectedHead))
 		{
-			rebuilt.put(name, selectedHead);
+			rebuilt.put(name, createConfiguredAssignment(selectedHead, name, true));
 		}
 		assignments = Collections.unmodifiableMap(rebuilt);
 		npcHeadAssignments = assignments;
@@ -3139,6 +3522,53 @@ public class FaceSwapPlugin extends Plugin
 	static String npcTargetNamesKey(FaceSwapHead head)
 	{
 		return "npcTargetNames_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
+	static String targetStylesKey(FaceSwapHead head)
+	{
+		return "targetStyles_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
+	static String npcTargetStylesKey(FaceSwapHead head)
+	{
+		return "npcTargetStyles_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
+	static Map<String, String> parseTargetStyles(String serializedStyles)
+	{
+		Map<String, String> styles = new HashMap<>();
+		if (serializedStyles == null || serializedStyles.isBlank())
+		{
+			return styles;
+		}
+		for (String entry : serializedStyles.split(","))
+		{
+			String[] fields = entry.split("=", 2);
+			if (fields.length == 2)
+			{
+				String name = normalizePlayerName(fields[0]);
+				String styleId = FaceSwapAssignment.normalizeStyleId(fields[1]);
+				if (!name.isEmpty() && !FaceSwapAssignment.DEFAULT_STYLE_ID.equals(styleId))
+				{
+					styles.put(name, styleId);
+				}
+			}
+		}
+		return styles;
+	}
+
+	static String serializeTargetStyles(Map<String, String> styles)
+	{
+		if (styles == null || styles.isEmpty())
+		{
+			return "";
+		}
+		return styles.entrySet().stream()
+			.filter(entry -> !entry.getKey().isBlank())
+			.map(entry -> normalizePlayerName(entry.getKey()) + "="
+				+ FaceSwapAssignment.normalizeStyleId(entry.getValue()))
+			.sorted()
+			.collect(Collectors.joining(","));
 	}
 
 	private static String normalizePlayerName(String name)

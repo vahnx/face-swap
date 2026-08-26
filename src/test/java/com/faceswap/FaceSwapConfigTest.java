@@ -36,6 +36,7 @@ public class FaceSwapConfigTest
 		assertFalse(config.opaqueBacking());
 		assertFalse(config.hideWithHeadgear());
 		assertFalse(config.debugEquipment());
+		assertFalse(config.interactiveHelmetCalibration());
 		assertEquals(34, config.helmetFaceDrop());
 		assertEquals(1, config.wrapHeightOffset());
 		assertEquals(27, config.wrapRegionHeight());
@@ -89,6 +90,7 @@ public class FaceSwapConfigTest
 		assertTrue(visibleKeys.contains("prototype3dY"));
 		assertTrue(visibleKeys.contains("prototype3dTextureWidth"));
 		assertTrue(visibleKeys.contains("saveHelmetPreset"));
+		assertTrue(visibleKeys.contains("interactiveHelmetCalibration"));
 		assertTrue(visibleKeys.contains("debugProjection"));
 		assertTrue(visibleKeys.contains("maskBacking"));
 		assertTrue(visibleKeys.contains("maskTrackingMode"));

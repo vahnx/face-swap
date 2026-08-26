@@ -23,11 +23,27 @@ final class FaceSwapCustomImageStore
 {
 	static final int IMAGE_SIZE = 512;
 	private static final int MAX_RECENTS = 12;
-	private final Path directory = RuneLite.RUNELITE_DIR.toPath().resolve("face-swap").resolve("custom-heads");
-	private final Path metadataFile = directory.resolve("recent.properties");
+	private final Path directory;
+	private final Path metadataFile;
 	private final List<Entry> recents = new ArrayList<>();
 	private final Map<String, BufferedImage> images = new ConcurrentHashMap<>();
 	private volatile String selectedId;
+
+	FaceSwapCustomImageStore()
+	{
+		this(RuneLite.RUNELITE_DIR.toPath().resolve("face-swap").resolve("custom-heads"));
+	}
+
+	FaceSwapCustomImageStore(Path directory)
+	{
+		this.directory = directory.toAbsolutePath().normalize();
+		this.metadataFile = this.directory.resolve("recent.properties");
+	}
+
+	Path getDirectory()
+	{
+		return directory;
+	}
 
 	void load()
 	{
@@ -72,6 +88,12 @@ final class FaceSwapCustomImageStore
 
 	Entry importImage(Path source) throws IOException
 	{
+		if (source == null)
+		{
+			throw new IOException("No image was selected");
+		}
+
+		Files.createDirectories(directory);
 		BufferedImage decoded = ImageIO.read(source.toFile());
 		if (decoded == null)
 		{
@@ -124,6 +146,11 @@ final class FaceSwapCustomImageStore
 	BufferedImage getImage(String id)
 	{
 		return images.get(id);
+	}
+
+	BufferedImage getSelectedImage()
+	{
+		return selectedId == null ? null : images.get(selectedId);
 	}
 
 	boolean hasSelectedImage()

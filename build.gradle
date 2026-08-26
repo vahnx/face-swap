@@ -59,6 +59,15 @@ tasks.register('run', JavaExec) {
 	args "--developer-mode", "--debug"
 }
 
+tasks.register('runRelease', JavaExec) {
+	group = 'application'
+	description = 'Runs RuneLite with Face Swap using the release configuration.'
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = pluginMainClass
+
+	jvmArgs "-ea"
+}
+
 tasks.register('exportElfHead', JavaExec) {
 	group = 'face swap tools'
 	description = 'Exports the Ensouled elf head cache model for Blender.'

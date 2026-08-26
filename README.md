@@ -7,7 +7,7 @@ Swap faces onto OSRS player or NPC models.
 - Pick from a selection of your favorite content creators
 - Target your player, friends, clanmates or anyone around you in-game to apply them
 - Apply them a 3D model or mask
-- Browse your own creations from your computer
+- Import your own photos to wear or apply to others
 
 ## Creators
 Current release creators:
@@ -59,6 +59,12 @@ Have lots of fun!
 
 Open the Face Swap sidepanel, choose a creator head, then use the Target button to select who the head should apply to. 
 
+Use `Browse...` in the Custom Images tab to select an image from your computer. Face Swap copies the imported image into `.runelite/face-swap/custom-heads/`; runtime helmet preset edits are stored in `.runelite/face-swap/helmet_profiles.csv`. The packaged `helmet_profiles.csv` is read-only default data.
+
+When running the local launcher with `--developer-mode`, enable `Interactive Helmet Calibration` in the developer configuration while using 3D mode. Drag the yellow face landmarks to deform nearby mesh regions in local X/Y; use the mouse wheel over a landmark for its local depth, or elsewhere over the head for global Z. The center and W/H/S/D handles remain available for broad global fitting. Use `Save preset` only after the fit is correct; `Reset` restores the packaged/runtime profile and saved mesh offsets for the equipped head item. Pitch, yaw, and roll remain available as numeric developer controls.
+
+Player and NPC target assignments are prepared for future alternate facial styles: existing target-name settings remain compatible, while optional style IDs default to `default` until alternate style assets and UI are added.
+
 Render modes:
 
 - `3D`
@@ -91,5 +97,7 @@ If you find this plugin useful and would like to support its continued developme
 - [Sponsor me on GitHub](https://github.com/sponsors/vahnx)
 - [Support me through PayPal](https://paypal.me/twitchplaying)
 - Bitcoin: `bc1qnl9nvwldzzdnlglqhvlhdm5l04rxawgkezr2ru`
+
+Join the [vahnx Projects Discord](https://discord.gg/bn4HcQWTp) for general support, suggestions and project discussion.
 
 Thank you for your support!

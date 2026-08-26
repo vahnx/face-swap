@@ -342,7 +342,11 @@ class FaceSwapPanel extends PluginPanel
 		refreshing = true;
 		try
 		{
-			selectedHeadPreview.setIcon(new ImageIcon(createPickerThumbnail(state.selectedHead)));
+			BufferedImage selectedCustomImage = state.selectedHead == FaceSwapHead.CUSTOM && plugin != null
+				? plugin.getSelectedCustomImage()
+				: null;
+			selectedHeadPreview.setIcon(new ImageIcon(
+				createSelectedHeadPreviewThumbnail(state.selectedHead, selectedCustomImage)));
 			selectedHeadPreview.setToolTipText(state.selectedHead.toString());
 			updateModeButtons(state.renderMode);
 			qualitySlider.setValue(state.qualityLevel);
@@ -650,7 +654,7 @@ class FaceSwapPanel extends PluginPanel
 		controls.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		JButton browseButton = new JButton("Browse...");
 		JTextArea status = new JTextArea(
-			"Preferred: transparent 512x512 PNG. JPG/BMP accepted; background removal is not automatic.");
+			"Choose an image from your computer. It will be copied into Face Swap storage. Preferred: transparent 512x512 PNG. JPG/BMP accepted; background removal is not automatic.");
 		status.setLineWrap(true);
 		status.setWrapStyleWord(true);
 		status.setRows(2);
@@ -697,7 +701,7 @@ class FaceSwapPanel extends PluginPanel
 
 	private void browseForCustomImage(JTextArea status)
 	{
-		JFileChooser chooser = new JFileChooser();
+		JFileChooser chooser = new JFileChooser(plugin.getCustomImageDirectory().toFile());
 		chooser.setDialogTitle("Choose a custom face image");
 		chooser.setFileFilter(new FileNameExtensionFilter("Image files (PNG, JPG, JPEG, BMP)", "png", "jpg", "jpeg", "bmp"));
 		if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
@@ -764,7 +768,7 @@ class FaceSwapPanel extends PluginPanel
 		if (category == FaceSwapHeadCategory.CONTENT_CREATOR)
 		{
 			addAll(ordered,
-				FaceSwapHead.ODABLOCK,
+				// FaceSwapHead.ODABLOCK,
 				FaceSwapHead.SARDACO,
 				FaceSwapHead.SKILL_SPECS,
 				FaceSwapHead.TASTYLIFE,
@@ -806,18 +810,19 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.PENGUIN,
 				FaceSwapHead.CAT,
 				FaceSwapHead.MONKEY_PHOTO,
-				FaceSwapHead.CLOWN,
-				FaceSwapHead.ORANGE_PARKA,
-				FaceSwapHead.CLASSIC_ADVENTURER,
-				FaceSwapHead.PURPLE_DINOSAUR,
-				FaceSwapHead.SPACE_MARINE,
-				FaceSwapHead.HALFLING,
-				FaceSwapHead.BANDICOOT,
-				FaceSwapHead.AGENT,
-				FaceSwapHead.MONKEY,
-				FaceSwapHead.CHOSEN_ONE,
-				FaceSwapHead.MARTIAL_ARTIST,
-				FaceSwapHead.BOSS);
+				// FaceSwapHead.CLOWN,
+				// FaceSwapHead.ORANGE_PARKA,
+				FaceSwapHead.CLASSIC_ADVENTURER
+				// FaceSwapHead.PURPLE_DINOSAUR,
+				// FaceSwapHead.SPACE_MARINE,
+				// FaceSwapHead.HALFLING,
+				// FaceSwapHead.BANDICOOT,
+				// FaceSwapHead.AGENT,
+				// FaceSwapHead.MONKEY,
+				// FaceSwapHead.CHOSEN_ONE,
+				// FaceSwapHead.MARTIAL_ARTIST,
+				// FaceSwapHead.BOSS
+				);
 		}
 		else if (category == FaceSwapHeadCategory.EMOJI)
 		{
@@ -953,6 +958,13 @@ class FaceSwapPanel extends PluginPanel
 	static BufferedImage createPickerThumbnail(FaceSwapHead head)
 	{
 		return PICKER_THUMBNAIL_CACHE.computeIfAbsent(head, FaceSwapPanel::createPickerThumbnailUncached);
+	}
+
+	static BufferedImage createSelectedHeadPreviewThumbnail(FaceSwapHead head, BufferedImage customImage)
+	{
+		return head == FaceSwapHead.CUSTOM && customImage != null
+			? createCustomThumbnail(customImage)
+			: createPickerThumbnail(head);
 	}
 
 	private static BufferedImage createPickerThumbnailUncached(FaceSwapHead head)

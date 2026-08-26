@@ -36,24 +36,14 @@ public class FaceSwapReleaseAssetsTest
 	@Test
 	public void debugOnlyAssetsRemainOnDeveloperClasspath()
 	{
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/content_creators/odablock_front.png") != null);
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/content_creators/odablock_back.png") != null);
+		// Odablock is temporarily commented out and is not expected in the release.
 	}
 
 	@Test
 	public void fictionalAssetsUseTheirReleaseDirectory()
 	{
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/fictional_characters/agent_front.png") != null);
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/fictional_characters/agent_back.png") != null);
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/fictional_characters/monkey_front.png") != null);
-		assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
-			"/heads/fictional_characters/monkey_back.png") != null);
-		for (String head : new String[] {"pug", "horse", "rabbit", "penguin", "cat", "monkey_photo", "clown"})
+		// Removed fictional-character assets are intentionally no longer packaged.
+		for (String head : new String[] {"pug", "horse", "rabbit", "penguin", "cat", "monkey_photo"})
 		{
 			assertTrue(FaceSwapReleaseAssetsTest.class.getResource(
 				"/heads/fictional_characters/" + head + "_front.png") != null);

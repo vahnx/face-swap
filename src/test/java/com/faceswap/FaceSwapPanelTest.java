@@ -1,6 +1,5 @@
 package com.faceswap;
 
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.image.BufferedImage;
@@ -15,30 +14,21 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class FaceSwapPanelTest
 {
-	@Test
-	public void demoHeadsReceiveTopPickerBadge()
-	{
-		BufferedImage demo = FaceSwapPanel.createPickerThumbnail(FaceSwapHead.ODABLOCK);
-		BufferedImage release = FaceSwapPanel.createPickerThumbnail(FaceSwapHead.SARDACO);
-
-		assertEquals(Color.BLACK.getRGB(), demo.getRGB(2, 2));
-		assertNotEquals(Color.BLACK.getRGB(), release.getRGB(2, 2));
-	}
+	// Odablock's demo-thumbnail coverage is disabled while the head is commented out.
 
 	@Test
-	public void fictionalPickerPlacesNewHeadsFirstAndClownSeventh()
+	public void fictionalPickerOrdering()
 	{
 		List<FaceSwapHead> heads = FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.FICTIONAL_CHARACTER);
 
 		assertEquals(FaceSwapHead.PUG, heads.get(0));
-		assertEquals(FaceSwapHead.CLOWN, heads.get(6));
-		assertTrue(heads.contains(FaceSwapHead.AGENT));
-		assertTrue(heads.contains(FaceSwapHead.MONKEY));
+		assertEquals(FaceSwapHead.CLASSIC_ADVENTURER, heads.get(6));
+		assertFalse(heads.stream().anyMatch(head -> head.name().equals("AGENT")));
+		assertFalse(heads.stream().anyMatch(head -> head.name().equals("MONKEY")));
 	}
 
 	@Test
@@ -47,7 +37,6 @@ public class FaceSwapPanelTest
 		List<FaceSwapHead> heads = FaceSwapPanel.orderedHeadsForPicker(FaceSwapHeadCategory.CONTENT_CREATOR);
 
 		FaceSwapHead[] expectedCreators = {
-			FaceSwapHead.ODABLOCK,
 			FaceSwapHead.SARDACO,
 			FaceSwapHead.SKILL_SPECS,
 			FaceSwapHead.TASTYLIFE,
@@ -93,6 +82,20 @@ public class FaceSwapPanelTest
 		assertModeArtwork("/mode_icons/mode_3d.png", FaceSwapRenderMode.THREE_D);
 		assertModeArtwork("/mode_icons/mode_mask.png", FaceSwapRenderMode.MASK);
 		assertModeArtwork("/mode_icons/mode_wraparound.png", FaceSwapRenderMode.TWO_D);
+	}
+
+	@Test
+	public void selectedCustomPreviewUsesTheLoadedImage()
+	{
+		BufferedImage customImage = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB);
+		customImage.setRGB(4, 4, 0xFFFF0000);
+
+		BufferedImage thumbnail = FaceSwapPanel.createSelectedHeadPreviewThumbnail(
+			FaceSwapHead.CUSTOM, customImage);
+
+		assertEquals(96, thumbnail.getWidth());
+		assertEquals(96, thumbnail.getHeight());
+		assertTrue((thumbnail.getRGB(48, 48) & 0x00FF0000) > 0);
 	}
 
 	@Test

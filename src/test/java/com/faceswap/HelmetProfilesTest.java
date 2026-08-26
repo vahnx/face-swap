@@ -1,6 +1,7 @@
 package com.faceswap;
 
 import net.runelite.api.ItemID;
+import net.runelite.client.RuneLite;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -39,5 +40,13 @@ public class HelmetProfilesTest
 		assertEquals(6, HelmetProfiles.find(ItemID.NEITIZNOT_FACEGUARD).getMaskY());
 		assertNotNull(HelmetProfiles.find(ItemID.BLUE_MOON_HELM));
 		assertNotNull(HelmetProfiles.find(ItemID.GRACEFUL_HOOD));
+	}
+
+	@Test
+	public void storesRuntimeProfilesInPluginDirectory()
+	{
+		assertEquals(
+			RuneLite.RUNELITE_DIR.toPath().resolve("face-swap").resolve("helmet_profiles.csv"),
+			HelmetProfiles.RUNTIME_FILE);
 	}
 }

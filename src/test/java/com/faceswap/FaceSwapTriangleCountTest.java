@@ -26,7 +26,7 @@ public class FaceSwapTriangleCountTest
 	public void autoUsesMediumPresetForEveryCreator()
 	{
 		assertEquals(FaceSwapTriangleCount.TRIANGLES_4000,
-			FaceSwapTriangleCount.AUTO.resolve(FaceSwapHead.ODABLOCK));
+			FaceSwapTriangleCount.AUTO.resolve(FaceSwapHead.PURESPAM));
 		assertEquals(FaceSwapTriangleCount.TRIANGLES_4000,
 			FaceSwapTriangleCount.AUTO.resolve(FaceSwapHead.KING_CONDOR));
 		assertEquals(FaceSwapTriangleCount.TRIANGLES_4000,

@@ -148,6 +148,11 @@ final class FaceSwapCustomImageStore
 		return images.get(id);
 	}
 
+	BufferedImage getSelectedImage()
+	{
+		return selectedId == null ? null : images.get(selectedId);
+	}
+
 	boolean hasSelectedImage()
 	{
 		return selectedId != null && images.containsKey(selectedId);

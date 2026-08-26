@@ -342,7 +342,11 @@ class FaceSwapPanel extends PluginPanel
 		refreshing = true;
 		try
 		{
-			selectedHeadPreview.setIcon(new ImageIcon(createPickerThumbnail(state.selectedHead)));
+			BufferedImage selectedCustomImage = state.selectedHead == FaceSwapHead.CUSTOM && plugin != null
+				? plugin.getSelectedCustomImage()
+				: null;
+			selectedHeadPreview.setIcon(new ImageIcon(
+				createSelectedHeadPreviewThumbnail(state.selectedHead, selectedCustomImage)));
 			selectedHeadPreview.setToolTipText(state.selectedHead.toString());
 			updateModeButtons(state.renderMode);
 			qualitySlider.setValue(state.qualityLevel);
@@ -954,6 +958,13 @@ class FaceSwapPanel extends PluginPanel
 	static BufferedImage createPickerThumbnail(FaceSwapHead head)
 	{
 		return PICKER_THUMBNAIL_CACHE.computeIfAbsent(head, FaceSwapPanel::createPickerThumbnailUncached);
+	}
+
+	static BufferedImage createSelectedHeadPreviewThumbnail(FaceSwapHead head, BufferedImage customImage)
+	{
+		return head == FaceSwapHead.CUSTOM && customImage != null
+			? createCustomThumbnail(customImage)
+			: createPickerThumbnail(head);
 	}
 
 	private static BufferedImage createPickerThumbnailUncached(FaceSwapHead head)

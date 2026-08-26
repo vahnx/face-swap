@@ -2898,6 +2898,11 @@ public class FaceSwapPlugin extends Plugin
 		return customImageStore.getImage(id);
 	}
 
+	BufferedImage getSelectedCustomImage()
+	{
+		return customImageStore.getSelectedImage();
+	}
+
 	void importCustomImage(java.nio.file.Path source, Consumer<String> callback)
 	{
 		customImageExecutor.submit(() ->

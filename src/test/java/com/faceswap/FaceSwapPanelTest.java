@@ -85,6 +85,20 @@ public class FaceSwapPanelTest
 	}
 
 	@Test
+	public void selectedCustomPreviewUsesTheLoadedImage()
+	{
+		BufferedImage customImage = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB);
+		customImage.setRGB(4, 4, 0xFFFF0000);
+
+		BufferedImage thumbnail = FaceSwapPanel.createSelectedHeadPreviewThumbnail(
+			FaceSwapHead.CUSTOM, customImage);
+
+		assertEquals(96, thumbnail.getWidth());
+		assertEquals(96, thumbnail.getHeight());
+		assertTrue((thumbnail.getRGB(48, 48) & 0x00FF0000) > 0);
+	}
+
+	@Test
 	public void styleButtonsDoNotCaptureArrowKeysButDropdownsRemainFocusable()
 	{
 		FaceSwapPanel panel = new FaceSwapPanel(null, new FaceSwapPanelState(

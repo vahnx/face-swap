@@ -8,6 +8,7 @@ import javax.imageio.ImageIO;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class FaceSwapCustomImageStoreTest
@@ -25,6 +26,7 @@ public class FaceSwapCustomImageStoreTest
 
 			assertNotNull(entry);
 			assertTrue(Files.isRegularFile(directory.resolve(entry.id + ".png")));
+			assertSame(store.getImage(entry.id), store.getSelectedImage());
 		}
 		finally
 		{

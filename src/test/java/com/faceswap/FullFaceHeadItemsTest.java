@@ -23,5 +23,6 @@ public class FullFaceHeadItemsTest
 		assertFalse(FullFaceHeadItems.contains(ItemID.RUNE_MED_HELM));
 		assertFalse(FullFaceHeadItems.contains(ItemID.ARMADYL_HELMET));
 		assertFalse(FullFaceHeadItems.contains(ItemID.VOID_MELEE_HELM));
+		assertFalse(FullFaceHeadItems.contains(ItemID.FROG_MASK));
 	}
 }

@@ -73,6 +73,8 @@ This file is split into shared RuneLite Plugin Hub guidance and repo-specific ov
 - Do not commit build artifacts — no `.class` files, `out/` directories, or `.tmp` directories.
 - `build.gradle` must target Java 11** and match the structure of the example-plugin template.
 - Retain a permissive license, such as BSD-2.
+- Include a committed root-level `icon.png` for the Plugin Hub listing. It must be a real PNG no larger than `48x72` pixels; use a square `48x48` icon where possible.
+- The Plugin Hub listing icon is separate from the runtime toolbar icon. Face Swap uses root `icon.png` for Plugin Hub and `src/main/resources/face_swap_icon.png` for the in-client navigation button; the Plugin Hub manifest does not need an `icon=` field.
 
 ## Resources & Assets
 
@@ -149,6 +151,9 @@ These rules are specific to this repository and should be kept separate from the
 - The user must log in through the [Using Jagex Accounts instructions](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts).
 - Tell the user exactly what to test, including front/side/back views, camera movement, scene changes, equipment, target scopes, and plugin disable/enable when relevant.
 - A passing build or clean JVM start is not in-game verification. Wait for user confirmation of visual behavior.
+- Before a Plugin Hub submission, verify the root icon with `git ls-tree -r HEAD -- icon.png`, confirm its PNG type and dimensions, run `git diff --check`, and ensure the manifest pin references the pushed source commit.
+- Plugin Hub source and manifest updates are separate repository changes: update `plugins/<plugin-name>` in a fork branch based on the current upstream `master`, then verify the submitted PR's immutable source commit pin.
+- A red `RuneLite Plugin Hub Checks` status stating that maintainer review is required is a review gate, not necessarily a build failure; inspect the normal `build` check separately.
 
 ---
 

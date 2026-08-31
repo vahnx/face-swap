@@ -41,11 +41,15 @@ dependencies {
 }
 
 group = 'com.faceswap'
-version = '0.9.0'
+version = '0.10.0'
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
+}
+
+tasks.withType(Test).configureEach {
+	maxHeapSize = '1g'
 }
 
 tasks.register('run', JavaExec) {

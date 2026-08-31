@@ -40,6 +40,40 @@ public interface FaceSwapReleaseConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "headPickerLayout",
+		name = "Head Picker Layout",
+		description = "Choose whether the character picker opens in a popup or inline in the Face Swap sidepanel.",
+		position = 1,
+		section = SIDEPANEL_SECTION
+	)
+	default FaceSwapHeadPickerLayout headPickerLayout()
+	{
+		return FaceSwapHeadPickerLayout.INLINE;
+	}
+
+	@ConfigItem(
+		keyName = "lastHeadPickerCategory",
+		name = "Last Head Picker Category",
+		description = "The last category selected in the character picker.",
+		hidden = true
+	)
+	default FaceSwapHeadCategory lastHeadPickerCategory()
+	{
+		return FaceSwapHeadCategory.CONTENT_CREATOR;
+	}
+
+	@ConfigItem(
+		keyName = "headPickerOpened",
+		name = "Head Picker Opened",
+		description = "Whether the character picker has been opened at least once.",
+		hidden = true
+	)
+	default boolean headPickerOpened()
+	{
+		return false;
+	}
+
+	@ConfigItem(
 		keyName = "renderMode",
 		name = "Style",
 		description = "Renders a rigged 3D head, a projected wraparound, or a front face mask with straps.",

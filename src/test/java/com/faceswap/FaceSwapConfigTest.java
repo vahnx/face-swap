@@ -24,13 +24,17 @@ public class FaceSwapConfigTest
 	{
 		assertEquals(FaceSwapHead.SARDACO, config.selectedHead());
 		assertEquals(FaceSwapHead.SARDACO, releaseConfig.selectedHead());
-		assertEquals(FaceSwapHead.SARDACO, FaceSwapHead.values()[0]);
+		assertEquals(FaceSwapHead.GNOMONKEY, FaceSwapHead.values()[0]);
 		assertEquals(FaceSwapRenderMode.MASK, FaceSwapRenderMode.values()[1]);
 		assertEquals(FaceSwapRenderMode.TWO_D, FaceSwapRenderMode.values()[2]);
 		assertEquals(FaceSwapRenderMode.MASK, config.renderMode());
 		assertEquals(FaceSwapRenderMode.MASK, releaseConfig.renderMode());
 		assertTrue(config.tabbedHeadPicker());
 		assertTrue(releaseConfig.tabbedHeadPicker());
+		assertEquals(FaceSwapHeadCategory.CONTENT_CREATOR, config.lastHeadPickerCategory());
+		assertEquals(FaceSwapHeadCategory.CONTENT_CREATOR, releaseConfig.lastHeadPickerCategory());
+		assertFalse(config.headPickerOpened());
+		assertFalse(releaseConfig.headPickerOpened());
 		assertFalse(config.dkMode());
 		assertFalse(config.debugProjection());
 		assertFalse(config.opaqueBacking());
@@ -47,6 +51,7 @@ public class FaceSwapConfigTest
 		assertEquals(40, config.wrapTextureTopBias());
 		assertEquals(12, config.wrapBackingExpansion());
 		assertEquals(70, config.maskWidth());
+		assertTrue(config.showMaskStrap());
 		assertEquals(MaskTrackingMode.AUTO, config.maskTrackingMode());
 		assertEquals(10, config.targetRadius());
 		assertEquals(FaceSwapNpcTargetScope.DISABLED, config.npcTargetScope());
@@ -79,7 +84,8 @@ public class FaceSwapConfigTest
 	@Test
 	public void exposesOnlyReleaseControlsOutsideDeveloperMode()
 	{
-		assertEquals(Set.of("tabbedHeadPicker"), visibleKeys(FaceSwapReleaseConfig.class));
+		assertEquals(Set.of("tabbedHeadPicker", "headPickerLayout"),
+			visibleKeys(FaceSwapReleaseConfig.class));
 	}
 
 	@Test

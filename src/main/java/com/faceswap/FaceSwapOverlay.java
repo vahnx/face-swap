@@ -14,9 +14,12 @@ import java.awt.geom.QuadCurve2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import javax.inject.Inject;
 import net.runelite.api.Actor;
@@ -64,7 +67,30 @@ class FaceSwapOverlay extends Overlay
 	private static final float TEXTURE_VERTICAL_RANGE = 0.84f;
 	private static final int HELMET_OCCLUSION_EXPANSION = 1;
 	private static final double WRAP_LIFT_REFERENCE_PROJECTED_HEIGHT = 420d;
+	private static final int MAX_WRAP_MODEL_VERTICES = 4096;
+	private static final int MAX_WRAP_MODEL_FACES = 8192;
 	private static final int NO_APPEARANCE_FINGERPRINT = Integer.MIN_VALUE;
+	private static final Set<Integer> WRAPAROUND_TELEPORT_ANIMATIONS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+		net.runelite.api.AnimationID.BOOK_HOME_TELEPORT_1,
+		net.runelite.api.AnimationID.BOOK_HOME_TELEPORT_2,
+		net.runelite.api.AnimationID.BOOK_HOME_TELEPORT_3,
+		net.runelite.api.AnimationID.BOOK_HOME_TELEPORT_4,
+		net.runelite.api.AnimationID.BOOK_HOME_TELEPORT_5,
+		AnimationID.HOME_TELEPORT_HUMAN_FIRE_1,
+		AnimationID.HOME_TELEPORT_HUMAN_FIRE_2,
+		AnimationID.HOME_TELEPORT_HUMAN_FIRE_3,
+		AnimationID.HOME_TELEPORT_HUMAN_FIRE_4,
+		AnimationID.HOME_TELEPORT_HUMAN_FIRE_5,
+		AnimationID.HOME_TELEPORT_HUMAN_ECHOES_1,
+		AnimationID.HOME_TELEPORT_HUMAN_ECHOES_2,
+		AnimationID.HOME_TELEPORT_HUMAN_ECHOES_3,
+		AnimationID.HOME_TELEPORT_HUMAN_ECHOES_4,
+		AnimationID.HOME_TELEPORT_HUMAN_ECHOES_5,
+		AnimationID.DMM2024_HOME_TELEPORT_HUMAN_1,
+		AnimationID.DMM2024_HOME_TELEPORT_HUMAN_2,
+		AnimationID.DMM2024_HOME_TELEPORT_HUMAN_3,
+		AnimationID.DMM2024_HOME_TELEPORT_HUMAN_4,
+		AnimationID.DMM2024_HOME_TELEPORT_HUMAN_5)));
 	private static final Color TONGUE_FILL = new Color(226, 84, 116, 235);
 	private static final Color TONGUE_OUTLINE = new Color(118, 25, 49, 235);
 	private static final Color INNER_EAR_FILL = new Color(255, 180, 208, 235);
@@ -99,21 +125,28 @@ class FaceSwapOverlay extends Overlay
 		}
 
 		renderPickTargetOutline(graphics);
-		if (plugin.isPrototype3dEnabled())
-		{
-			return null;
-		}
+		// DK Mode hat relocation/redraw is intentionally disabled until its
+		// depth and positioning behavior can be made reliable.
 
 		for (Player player : client.getPlayers())
 		{
-			FaceSwapHead assignedHead = plugin.getAssignedHead(player);
+			FaceSwapAssignment assignment = plugin.getAssignedAssignment(player);
+			FaceSwapHead assignedHead = assignment == null ? null : assignment.getHead();
 			if (assignedHead == null)
 			{
 				continue;
 			}
 
-			FaceSwapRenderMode renderMode = plugin.getRenderMode();
+			FaceSwapRenderMode renderMode = plugin.getAssignmentRenderMode(assignment);
+			if (renderMode == FaceSwapRenderMode.THREE_D)
+			{
+				continue;
+			}
 			if (renderMode == FaceSwapRenderMode.TWO_D && plugin.hasHeadgear(player))
+			{
+				continue;
+			}
+			if (renderMode == FaceSwapRenderMode.TWO_D && shouldSkipWraparound(player))
 			{
 				continue;
 			}
@@ -121,7 +154,8 @@ class FaceSwapOverlay extends Overlay
 			{
 				continue;
 			}
-			if (renderMode == FaceSwapRenderMode.TWO_D && renderProjectedHeadTriangles(graphics, player, assignedHead))
+			if (renderMode == FaceSwapRenderMode.TWO_D
+				&& renderProjectedHeadTriangles(graphics, player, assignment))
 			{
 				renderEmoteAccessories(graphics, player);
 				if (plugin.isDebugProjection())
@@ -132,12 +166,16 @@ class FaceSwapOverlay extends Overlay
 			}
 			if (renderMode == FaceSwapRenderMode.MASK)
 			{
-				renderProjectedFaceMask(graphics, player, assignedHead);
+				renderProjectedFaceMask(graphics, player, assignment);
 				continue;
 			}
 
 			FaceSwapHeadDirection direction = getHeadDirection(player);
-			BufferedImage headImage = FaceSwapHeadImages.get(assignedHead, direction);
+			BufferedImage headImage = plugin.getAssignmentImage(assignment, direction);
+			if (headImage == null)
+			{
+				continue;
+			}
 			renderBillboard(graphics, player, headImage);
 			renderEmoteAccessories(graphics, player);
 			if (plugin.isDebugProjection())
@@ -147,24 +185,218 @@ class FaceSwapOverlay extends Overlay
 		}
 		for (NPC npc : client.getNpcs())
 		{
-			FaceSwapHead assignedHead = plugin.getAssignedHead(npc);
+			FaceSwapAssignment assignment = plugin.getAssignedAssignment(npc);
+			FaceSwapHead assignedHead = assignment == null ? null : assignment.getHead();
 			if (assignedHead == null)
 			{
 				continue;
 			}
-			if (plugin.getRenderMode() == FaceSwapRenderMode.MASK)
+			FaceSwapRenderMode renderMode = plugin.getAssignmentRenderMode(assignment);
+			if (renderMode == FaceSwapRenderMode.TWO_D && shouldSkipWraparound(npc))
 			{
-				renderProjectedFaceMask(graphics, npc, assignedHead);
+				continue;
 			}
-			else if (plugin.getRenderMode() == FaceSwapRenderMode.TWO_D)
+			if (renderMode == FaceSwapRenderMode.MASK)
 			{
-				if (renderProjectedHeadTriangles(graphics, npc, assignedHead))
+				renderProjectedFaceMask(graphics, npc, assignment);
+			}
+			else if (renderMode == FaceSwapRenderMode.TWO_D)
+			{
+				if (renderProjectedHeadTriangles(graphics, npc, assignment))
 				{
 					renderEmoteAccessories(graphics, npc);
 				}
 			}
 		}
 		return null;
+	}
+
+	private void renderDkModeHatOverlays(Graphics2D graphics)
+	{
+		if (!plugin.isDkMode())
+		{
+			return;
+		}
+
+		for (Player player : client.getPlayers())
+		{
+			FaceSwapAssignment assignment = plugin.getAssignedAssignment(player);
+			if (assignment != null
+				&& plugin.getAssignmentRenderMode(assignment) == FaceSwapRenderMode.THREE_D
+				&& plugin.shouldRenderDkModeHat(player))
+			{
+				renderDkModeHat(graphics, player);
+			}
+		}
+	}
+
+	private void renderDkModeHat(Graphics2D graphics, Player player)
+	{
+		Model model = player.getModel();
+		LocalPoint localLocation = player.getLocalLocation();
+		WorldView worldView = player.getWorldView();
+		if (model == null || localLocation == null || worldView == null)
+		{
+			return;
+		}
+
+		ModelBounds bounds = getModelBounds(model);
+		float[] verticesX = model.getVerticesX();
+		float[] verticesY = model.getVerticesY();
+		float[] verticesZ = model.getVerticesZ();
+		int[] face1 = model.getFaceIndices1();
+		int[] face2 = model.getFaceIndices2();
+		int[] face3 = model.getFaceIndices3();
+		int[] colors1 = model.getFaceColors1();
+		int[] colors2 = model.getFaceColors2();
+		int[] colors3 = model.getFaceColors3();
+		if (bounds == null || verticesX == null || verticesY == null || verticesZ == null
+			|| face1 == null || face2 == null || face3 == null
+			|| colors1 == null || colors2 == null || colors3 == null)
+		{
+			return;
+		}
+
+		int vertexCount = model.getVerticesCount();
+		float[] liftedVerticesY = verticesY.clone();
+		for (int vertex = 0; vertex < vertexCount; vertex++)
+		{
+			liftedVerticesY[vertex] -= 64f;
+		}
+
+		int[] screenX = new int[vertexCount];
+		int[] screenY = new int[vertexCount];
+		int tileHeight = Perspective.getTileHeight(client, localLocation, worldView.getPlane())
+			- player.getAnimationHeightOffset();
+		int orientation = player.getCurrentOrientation() & 2047;
+		Perspective.modelToCanvas(
+			client,
+			worldView,
+			vertexCount,
+			localLocation.getX(),
+			localLocation.getY(),
+			tileHeight,
+			orientation,
+			verticesX,
+			verticesZ,
+			liftedVerticesY,
+			screenX,
+			screenY);
+
+		// The live player model is a merged body/equipment model, so there is no
+		// public face-level mesh boundary for the hat. Restrict the redraw to the
+		// very top slice and require the whole triangle to be in that slice. This
+		// prevents the face, neck, and shoulders from being copied above the DK head.
+		float hatRegionTop = bounds.maxY - (bounds.maxY - bounds.minY) * 0.18f;
+		List<DkHatTriangle> triangles = new ArrayList<>();
+		for (int face = 0; face < model.getFaceCount(); face++)
+		{
+			int a = face1[face];
+			int b = face2[face];
+			int c = face3[face];
+			if (verticesY[a] < hatRegionTop
+				|| verticesY[b] < hatRegionTop
+				|| verticesY[c] < hatRegionTop
+				|| !validPoint(screenX[a], screenY[a])
+				|| !validPoint(screenX[b], screenY[b])
+				|| !validPoint(screenX[c], screenY[c]))
+			{
+				continue;
+			}
+
+			int color3 = colors3[face];
+			if (color3 == -2)
+			{
+				continue;
+			}
+			int color1 = colors1[face];
+			int color2 = colors2[face];
+			if (color3 == -1)
+			{
+				color2 = color3 = color1;
+			}
+			Color color = averageModelColor(color1, color2, color3);
+			double cameraDistance = getTriangleCameraDistance(
+				localLocation,
+				tileHeight,
+				orientation,
+				(verticesX[a] + verticesX[b] + verticesX[c]) / 3f,
+				(liftedVerticesY[a] + liftedVerticesY[b] + liftedVerticesY[c]) / 3f,
+				(verticesZ[a] + verticesZ[b] + verticesZ[c]) / 3f);
+			triangles.add(new DkHatTriangle(
+				new Polygon(
+					new int[]{screenX[a], screenX[b], screenX[c]},
+					new int[]{screenY[a], screenY[b], screenY[c]}, 3),
+				color,
+				cameraDistance));
+		}
+
+		triangles.sort(Comparator.comparingDouble((DkHatTriangle triangle) -> triangle.cameraDistance).reversed());
+		for (DkHatTriangle triangle : triangles)
+		{
+			graphics.setColor(triangle.color);
+			graphics.fillPolygon(triangle.polygon);
+		}
+	}
+
+	private static Color averageModelColor(int value1, int value2, int value3)
+	{
+		Color color1 = hslToColor(value1);
+		Color color2 = hslToColor(value2);
+		Color color3 = hslToColor(value3);
+		return new Color(
+			(color1.getRed() + color2.getRed() + color3.getRed()) / 3,
+			(color1.getGreen() + color2.getGreen() + color3.getGreen()) / 3,
+			(color1.getBlue() + color2.getBlue() + color3.getBlue()) / 3);
+	}
+
+	private static Color hslToColor(int value)
+	{
+		double hue = ((value >> 10) & 63) / 64d + 0.5d / 64d;
+		double saturation = ((value >> 7) & 7) / 8d + 0.5d / 8d;
+		double lightness = (value & 127) / 128d;
+		double chroma = (1d - Math.abs(2d * lightness - 1d)) * saturation;
+		double scaledHue = hue * 6d;
+		double x = chroma * (1d - Math.abs(scaledHue % 2d - 1d));
+		double red = lightness - chroma / 2d;
+		double green = red;
+		double blue = red;
+		switch ((int) scaledHue)
+		{
+			case 0:
+				red += chroma;
+				green += x;
+				break;
+			case 1:
+				green += chroma;
+				red += x;
+				break;
+			case 2:
+				green += chroma;
+				blue += x;
+				break;
+			case 3:
+				blue += chroma;
+				green += x;
+				break;
+			case 4:
+				blue += chroma;
+				red += x;
+				break;
+			default:
+				red += chroma;
+				blue += x;
+				break;
+		}
+		return new Color(
+			(int) Math.round(Math.max(0d, Math.min(1d, red)) * 255d),
+			(int) Math.round(Math.max(0d, Math.min(1d, green)) * 255d),
+			(int) Math.round(Math.max(0d, Math.min(1d, blue)) * 255d));
+	}
+
+	private static boolean validPoint(int x, int y)
+	{
+		return x != Integer.MIN_VALUE && y != Integer.MIN_VALUE;
 	}
 
 	private void renderEmoteAccessories(Graphics2D graphics, Actor actor)
@@ -455,8 +687,10 @@ class FaceSwapOverlay extends Overlay
 		graphics.drawImage(headImage, x, y, overlaySize, overlaySize, null);
 	}
 
-	private boolean renderProjectedFaceMask(Graphics2D graphics, Actor player, FaceSwapHead assignedHead)
+	private boolean renderProjectedFaceMask(Graphics2D graphics, Actor player, FaceSwapAssignment assignment)
 	{
+		FaceSwapHead assignedHead = assignment.getHead();
+		String styleId = assignment.getStyleId();
 		Model model = player.getModel();
 		LocalPoint localLocation = player.getLocalLocation();
 		WorldView worldView = player.getWorldView();
@@ -556,107 +790,110 @@ class FaceSwapOverlay extends Overlay
 			bottomLeft,
 			bottomRight);
 
-		float strapY = top + (bottom - top) * 0.56f;
-		float rearStrapY = strapY - (bottom - top) * 0.12f;
-		float middleStrapY = strapY - (bottom - top) * 0.07f;
-		float frontStrapX = halfWidth * 0.68f;
-		float middleStrapX = headHalfWidth * 0.82f;
-		float rearStrapX = headHalfWidth * 0.65f;
-		java.awt.Stroke previousStroke = graphics.getStroke();
-		graphics.setColor(new Color(8, 8, 8, 235));
-		graphics.setStroke(new BasicStroke(1.25f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-		Point leftFront = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, -frontStrapX, strapY, frontZ);
-		Point rightFront = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, frontStrapX, strapY, frontZ);
-		Point leftMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, -middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
-		Point rightMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
-		Point leftBack = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, -rearStrapX, rearStrapY, backZ);
-		Point rightBack = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, rearStrapX, rearStrapY, backZ);
-		Point leftRearMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, -rearStrapX * 0.45f, rearStrapY - (bottom - top) * 0.04f, backZ + headDepth * 0.06f);
-		Point rightRearMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, rearStrapX * 0.45f, rearStrapY - (bottom - top) * 0.04f, backZ + headDepth * 0.06f);
-		Point backMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
-			headPose, 0f, rearStrapY - (bottom - top) * 0.05f, backZ + headDepth * 0.08f);
-		if (leftFront != null)
+		if (plugin.showMaskStrap())
 		{
-			leftFront = new Point(leftFront.getX() + screenX, leftFront.getY() + screenY);
+			float strapY = top + (bottom - top) * 0.56f;
+			float rearStrapY = strapY - (bottom - top) * 0.12f;
+			float middleStrapY = strapY - (bottom - top) * 0.07f;
+			float frontStrapX = halfWidth * 0.68f;
+			float middleStrapX = headHalfWidth * 0.82f;
+			float rearStrapX = headHalfWidth * 0.65f;
+			java.awt.Stroke previousStroke = graphics.getStroke();
+			graphics.setColor(new Color(8, 8, 8, 235));
+			graphics.setStroke(new BasicStroke(1.25f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			Point leftFront = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, -frontStrapX, strapY, frontZ);
+			Point rightFront = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, frontStrapX, strapY, frontZ);
+			Point leftMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, -middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
+			Point rightMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
+			Point leftBack = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, -rearStrapX, rearStrapY, backZ);
+			Point rightBack = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, rearStrapX, rearStrapY, backZ);
+			Point leftRearMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, -rearStrapX * 0.45f, rearStrapY - (bottom - top) * 0.04f, backZ + headDepth * 0.06f);
+			Point rightRearMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, rearStrapX * 0.45f, rearStrapY - (bottom - top) * 0.04f, backZ + headDepth * 0.06f);
+			Point backMiddle = projectMaskVertex(worldView, localLocation, tileHeight, orientation,
+				headPose, 0f, rearStrapY - (bottom - top) * 0.05f, backZ + headDepth * 0.08f);
+			if (leftFront != null)
+			{
+				leftFront = new Point(leftFront.getX() + screenX, leftFront.getY() + screenY);
+			}
+			if (rightFront != null)
+			{
+				rightFront = new Point(rightFront.getX() + screenX, rightFront.getY() + screenY);
+			}
+			if (leftMiddle != null)
+			{
+				leftMiddle = new Point(leftMiddle.getX() + screenX, leftMiddle.getY() + screenY);
+			}
+			if (rightMiddle != null)
+			{
+				rightMiddle = new Point(rightMiddle.getX() + screenX, rightMiddle.getY() + screenY);
+			}
+			if (leftBack != null)
+			{
+				leftBack = new Point(leftBack.getX() + screenX, leftBack.getY() + screenY);
+			}
+			if (rightBack != null)
+			{
+				rightBack = new Point(rightBack.getX() + screenX, rightBack.getY() + screenY);
+			}
+			if (leftRearMiddle != null)
+			{
+				leftRearMiddle = new Point(leftRearMiddle.getX() + screenX, leftRearMiddle.getY() + screenY);
+			}
+			if (rightRearMiddle != null)
+			{
+				rightRearMiddle = new Point(rightRearMiddle.getX() + screenX, rightRearMiddle.getY() + screenY);
+			}
+			if (backMiddle != null)
+			{
+				backMiddle = new Point(backMiddle.getX() + screenX, backMiddle.getY() + screenY);
+			}
+			FaceSwapHeadDirection cameraDirection = getHeadDirection(player);
+			boolean sideView = cameraDirection == FaceSwapHeadDirection.LEFT
+				|| cameraDirection == FaceSwapHeadDirection.RIGHT;
+			double leftStrapDistance = getMaskCameraDistance(localLocation, tileHeight, orientation,
+				headPose, -middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
+			double rightStrapDistance = getMaskCameraDistance(localLocation, tileHeight, orientation,
+				headPose, middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
+			boolean drawLeftSide = !sideView || leftStrapDistance <= rightStrapDistance;
+			boolean drawRightSide = !sideView || rightStrapDistance < leftStrapDistance;
+			if (drawLeftSide && leftFront != null && leftMiddle != null && leftBack != null)
+			{
+				graphics.draw(new QuadCurve2D.Float(
+					leftFront.getX(), leftFront.getY(),
+					leftMiddle.getX(), leftMiddle.getY(),
+					leftBack.getX(), leftBack.getY()));
+			}
+			if (drawRightSide && rightFront != null && rightMiddle != null && rightBack != null)
+			{
+				graphics.draw(new QuadCurve2D.Float(
+					rightFront.getX(), rightFront.getY(),
+					rightMiddle.getX(), rightMiddle.getY(),
+					rightBack.getX(), rightBack.getY()));
+			}
+			if (drawLeftSide && leftBack != null && leftRearMiddle != null && backMiddle != null)
+			{
+				graphics.draw(new QuadCurve2D.Float(
+					leftBack.getX(), leftBack.getY(),
+					leftRearMiddle.getX(), leftRearMiddle.getY(),
+					backMiddle.getX(), backMiddle.getY()));
+			}
+			if (drawRightSide && rightBack != null && rightRearMiddle != null && backMiddle != null)
+			{
+				graphics.draw(new QuadCurve2D.Float(
+					rightBack.getX(), rightBack.getY(),
+					rightRearMiddle.getX(), rightRearMiddle.getY(),
+					backMiddle.getX(), backMiddle.getY()));
+			}
+			graphics.setStroke(previousStroke);
 		}
-		if (rightFront != null)
-		{
-			rightFront = new Point(rightFront.getX() + screenX, rightFront.getY() + screenY);
-		}
-		if (leftMiddle != null)
-		{
-			leftMiddle = new Point(leftMiddle.getX() + screenX, leftMiddle.getY() + screenY);
-		}
-		if (rightMiddle != null)
-		{
-			rightMiddle = new Point(rightMiddle.getX() + screenX, rightMiddle.getY() + screenY);
-		}
-		if (leftBack != null)
-		{
-			leftBack = new Point(leftBack.getX() + screenX, leftBack.getY() + screenY);
-		}
-		if (rightBack != null)
-		{
-			rightBack = new Point(rightBack.getX() + screenX, rightBack.getY() + screenY);
-		}
-		if (leftRearMiddle != null)
-		{
-			leftRearMiddle = new Point(leftRearMiddle.getX() + screenX, leftRearMiddle.getY() + screenY);
-		}
-		if (rightRearMiddle != null)
-		{
-			rightRearMiddle = new Point(rightRearMiddle.getX() + screenX, rightRearMiddle.getY() + screenY);
-		}
-		if (backMiddle != null)
-		{
-			backMiddle = new Point(backMiddle.getX() + screenX, backMiddle.getY() + screenY);
-		}
-		FaceSwapHeadDirection cameraDirection = getHeadDirection(player);
-		boolean sideView = cameraDirection == FaceSwapHeadDirection.LEFT
-			|| cameraDirection == FaceSwapHeadDirection.RIGHT;
-		double leftStrapDistance = getMaskCameraDistance(localLocation, tileHeight, orientation,
-			headPose, -middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
-		double rightStrapDistance = getMaskCameraDistance(localLocation, tileHeight, orientation,
-			headPose, middleStrapX, middleStrapY, (frontZ + backZ) / 2f);
-		boolean drawLeftSide = !sideView || leftStrapDistance <= rightStrapDistance;
-		boolean drawRightSide = !sideView || rightStrapDistance < leftStrapDistance;
-		if (drawLeftSide && leftFront != null && leftMiddle != null && leftBack != null)
-		{
-			graphics.draw(new QuadCurve2D.Float(
-				leftFront.getX(), leftFront.getY(),
-				leftMiddle.getX(), leftMiddle.getY(),
-				leftBack.getX(), leftBack.getY()));
-		}
-		if (drawRightSide && rightFront != null && rightMiddle != null && rightBack != null)
-		{
-			graphics.draw(new QuadCurve2D.Float(
-				rightFront.getX(), rightFront.getY(),
-				rightMiddle.getX(), rightMiddle.getY(),
-				rightBack.getX(), rightBack.getY()));
-		}
-		if (drawLeftSide && leftBack != null && leftRearMiddle != null && backMiddle != null)
-		{
-			graphics.draw(new QuadCurve2D.Float(
-				leftBack.getX(), leftBack.getY(),
-				leftRearMiddle.getX(), leftRearMiddle.getY(),
-				backMiddle.getX(), backMiddle.getY()));
-		}
-		if (drawRightSide && rightBack != null && rightRearMiddle != null && backMiddle != null)
-		{
-			graphics.draw(new QuadCurve2D.Float(
-				rightBack.getX(), rightBack.getY(),
-				rightRearMiddle.getX(), rightRearMiddle.getY(),
-				backMiddle.getX(), backMiddle.getY()));
-		}
-		graphics.setStroke(previousStroke);
 
 		// Overlays have no scene depth buffer. Clip a rear-facing mask against
 		// the projected head triangles while retaining any exposed mask edges.
@@ -680,10 +917,14 @@ class FaceSwapOverlay extends Overlay
 			FaceSwapHeadDirection imageDirection = backFacing
 				? FaceSwapHeadDirection.BACK
 				: FaceSwapHeadDirection.FRONT;
-			BufferedImage faceImage = FaceSwapHeadImages.get(assignedHead, imageDirection);
+			BufferedImage faceImage = plugin.getAssignmentImage(assignment, imageDirection);
+			if (faceImage == null)
+			{
+				return false;
+			}
 			float imageWidth = Math.max(1, faceImage.getWidth() - 1);
 			float imageHeight = Math.max(1, faceImage.getHeight() - 1);
-			Color backing = FaceSwapHeadImages.getAverageColor(assignedHead, imageDirection);
+			Color backing = plugin.getAssignmentAverageColor(assignment, imageDirection);
 			Point imageTopLeft = backFacing ? topRight : topLeft;
 			Point imageTopRight = backFacing ? topLeft : topRight;
 			Point imageBottomLeft = backFacing ? bottomRight : bottomLeft;
@@ -1260,8 +1501,10 @@ class FaceSwapOverlay extends Overlay
 	private boolean renderProjectedHeadTriangles(
 		Graphics2D graphics,
 		Actor player,
-		FaceSwapHead assignedHead)
+		FaceSwapAssignment assignment)
 	{
+		FaceSwapHead assignedHead = assignment.getHead();
+		String styleId = assignment.getStyleId();
 		Model model = player.getModel();
 		LocalPoint localLocation = player.getLocalLocation();
 		WorldView worldView = player.getWorldView();
@@ -1356,6 +1599,9 @@ class FaceSwapOverlay extends Overlay
 		}
 		double liftScale = getWrapLiftScale(projection);
 
+		BufferedImage[] directionalImages = new BufferedImage[FaceSwapHeadDirection.values().length];
+		Color[] directionalColors = new Color[FaceSwapHeadDirection.values().length];
+		boolean[] directionalImagesLoaded = new boolean[FaceSwapHeadDirection.values().length];
 		List<TexturedTriangle> triangles = new ArrayList<>();
 		List<java.awt.Point> backingPoints = new ArrayList<>();
 
@@ -1387,8 +1633,22 @@ class FaceSwapOverlay extends Overlay
 				verticesZ[b] - headCenterZ,
 				verticesX[c] - headCenterX,
 				verticesZ[c] - headCenterZ);
-			BufferedImage headImage = FaceSwapHeadImages.get(assignedHead, direction);
-			Color backingColor = FaceSwapHeadImages.getAverageColor(assignedHead, direction);
+			int directionIndex = direction.ordinal();
+			if (!directionalImagesLoaded[directionIndex])
+			{
+				directionalImages[directionIndex] = plugin.getAssignmentImage(assignment, direction);
+				if (directionalImages[directionIndex] != null)
+				{
+					directionalColors[directionIndex] = plugin.getAssignmentAverageColor(assignment, direction);
+				}
+				directionalImagesLoaded[directionIndex] = true;
+			}
+			BufferedImage headImage = directionalImages[directionIndex];
+			if (headImage == null)
+			{
+				continue;
+			}
+			Color backingColor = directionalColors[directionIndex];
 			float[] uva = getTexturePoint(verticesX[a] - headCenterX, verticesY[a], verticesZ[a] - headCenterZ, direction, headRegion, headImage);
 			float[] uvb = getTexturePoint(verticesX[b] - headCenterX, verticesY[b], verticesZ[b] - headCenterZ, direction, headRegion, headImage);
 			float[] uvc = getTexturePoint(verticesX[c] - headCenterX, verticesY[c], verticesZ[c] - headCenterZ, direction, headRegion, headImage);
@@ -1477,7 +1737,8 @@ class FaceSwapOverlay extends Overlay
 
 			if (opaqueFace)
 			{
-				Color backingColor = FaceSwapHeadImages.getAverageColor(assignedHead, FaceSwapHeadDirection.FRONT);
+				Color backingColor = plugin.getAssignmentAverageColor(
+					assignment, FaceSwapHeadDirection.FRONT);
 				if (plugin.isOpaqueBacking() && !headRegion.headgearAdjusted)
 				{
 					fillProjectedHeadShield(graphics, worldView, localLocation, tileHeight, orientation, headRegion, backingColor, liftScale);
@@ -2799,6 +3060,49 @@ class FaceSwapOverlay extends Overlay
 		return FaceSwapHeadDirection.RIGHT;
 	}
 
+	private static boolean shouldSkipWraparound(Actor actor)
+	{
+		if (isWraparoundTeleportAnimation(actor.getAnimation()))
+		{
+			return true;
+		}
+		Model model = actor.getModel();
+		return model != null && !hasSaneWraparoundModel(model);
+	}
+
+	static boolean isWraparoundTeleportAnimation(int animationId)
+	{
+		return WRAPAROUND_TELEPORT_ANIMATIONS.contains(animationId);
+	}
+
+	private static boolean hasSaneWraparoundModel(Model model)
+	{
+		int vertexCount = model.getVerticesCount();
+		int faceCount = model.getFaceCount();
+		float[] verticesX = model.getVerticesX();
+		float[] verticesY = model.getVerticesY();
+		float[] verticesZ = model.getVerticesZ();
+		int[] face1 = model.getFaceIndices1();
+		int[] face2 = model.getFaceIndices2();
+		int[] face3 = model.getFaceIndices3();
+		return vertexCount > 0
+			&& vertexCount <= MAX_WRAP_MODEL_VERTICES
+			&& faceCount > 0
+			&& faceCount <= MAX_WRAP_MODEL_FACES
+			&& verticesX != null
+			&& verticesY != null
+			&& verticesZ != null
+			&& face1 != null
+			&& face2 != null
+			&& face3 != null
+			&& verticesX.length >= vertexCount
+			&& verticesY.length >= vertexCount
+			&& verticesZ.length >= vertexCount
+			&& face1.length >= faceCount
+			&& face2.length >= faceCount
+			&& face3.length >= faceCount;
+	}
+
 	static boolean isRaspberryAnimation(int animationId)
 	{
 		return animationId == AnimationID.EMOTE_YA_BOO_SUCKS
@@ -2898,6 +3202,20 @@ class FaceSwapOverlay extends Overlay
 			this.targetA = targetA;
 			this.targetB = targetB;
 			this.targetC = targetC;
+			this.cameraDistance = cameraDistance;
+		}
+	}
+
+	private static final class DkHatTriangle
+	{
+		private final Polygon polygon;
+		private final Color color;
+		private final double cameraDistance;
+
+		private DkHatTriangle(Polygon polygon, Color color, double cameraDistance)
+		{
+			this.polygon = polygon;
+			this.color = color;
 			this.cameraDistance = cameraDistance;
 		}
 	}

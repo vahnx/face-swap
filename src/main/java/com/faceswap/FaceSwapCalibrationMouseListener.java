@@ -39,6 +39,14 @@ final class FaceSwapCalibrationMouseListener extends MouseAdapter implements Mou
 			lastDragPoint = event.getPoint();
 			return event;
 		}
+		FaceSwapCalibrationOverlay.CalibrationControl control = overlay.getControlAt(event.getPoint());
+		if (control != null)
+		{
+			event.consume();
+			consumeNextClick = true;
+			control.apply(plugin);
+			return event;
+		}
 		CalibrationHandle handle = overlay.getHandleAt(event.getPoint());
 		if (handle == null)
 		{

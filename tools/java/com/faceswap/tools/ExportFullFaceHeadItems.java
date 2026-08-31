@@ -20,7 +20,8 @@ public final class ExportFullFaceHeadItems
 		"blood moon helm",
 		"crystal helm",
 		"blue moon helm",
-		"graceful hood"
+		"graceful hood",
+		"frog mask"
 	);
 
 	private ExportFullFaceHeadItems()

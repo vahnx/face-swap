@@ -1257,6 +1257,8 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.TPAPASLICE,
 				FaceSwapHead.PRISONJOE,
 				FaceSwapHead.GNOMONKEY,
+				FaceSwapHead.FRAMED,
+				FaceSwapHead.SOUP,
 				FaceSwapHead.ZECOOKIES,
 				FaceSwapHead.ALFIE,
 				FaceSwapHead.KING_CONDOR,
@@ -1272,6 +1274,7 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.JOSH_PILLAUT,
 				FaceSwapHead.MRNOSLEEP,
 				FaceSwapHead.SICK_NERD,
+				FaceSwapHead.HANI,
 
 				FaceSwapHead.ODABLOCK_OSRS,
 				FaceSwapHead.SARDACO_OSRS,
@@ -1280,6 +1283,8 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.TPAPASLICE_OSRS,
 				FaceSwapHead.PRISONJOE_OSRS,
 				FaceSwapHead.GNOMONKEY_OSRS,
+				FaceSwapHead.FRAMED_OSRS,
+				FaceSwapHead.SOUP_OSRS,
 				FaceSwapHead.ZECOOKIES_OSRS,
 				FaceSwapHead.ALFIE_OSRS,
 				FaceSwapHead.FOX_OSRS,
@@ -1295,7 +1300,8 @@ class FaceSwapPanel extends PluginPanel
 				FaceSwapHead.MMORPG_OSRS,
 				FaceSwapHead.JOSH_PILLAUT_OSRS,
 				FaceSwapHead.MRNOSLEEP_OSRS,
-				FaceSwapHead.SICK_NERD_OSRS
+				FaceSwapHead.SICK_NERD_OSRS,
+				FaceSwapHead.HANI_OSRS
 				);
 		}
 		else if (category == FaceSwapHeadCategory.FICTIONAL_CHARACTER)

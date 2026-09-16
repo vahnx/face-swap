@@ -67,6 +67,9 @@ final class FaceSwapHeadImages
 		"sick",
 		"in_love",
 		"7tv"));
+	private static final List<String> NEW_CREATOR_STYLE_IDS = Collections.unmodifiableList(Arrays.asList(
+		FaceSwapAssignment.DEFAULT_STYLE_ID,
+		"sad"));
 	private static final Set<String> PROCEDURAL_STYLE_IDS = Set.of(
 		"in_love",
 		"angel");
@@ -211,6 +214,10 @@ final class FaceSwapHeadImages
 		if (head == FaceSwapHead.MRNOSLEEP_MASK)
 		{
 			return Collections.singletonList(FaceSwapAssignment.DEFAULT_STYLE_ID);
+		}
+		if (head == FaceSwapHead.HANI || head == FaceSwapHead.FRAMED || head == FaceSwapHead.SOUP)
+		{
+			return NEW_CREATOR_STYLE_IDS;
 		}
 		if (head != null && head.isReleaseAvailable()
 			&& head.getCategory() == FaceSwapHeadCategory.CONTENT_CREATOR)

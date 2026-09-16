@@ -25,6 +25,51 @@ public class FaceSwapHeadImagesTest
 	}
 
 	@Test
+	public void newCreatorsUseStandardAndSadFrontsWithDirectionalFallbacks()
+	{
+		FaceSwapHead[][] variants = {
+			{FaceSwapHead.HANI, FaceSwapHead.HANI_OSRS},
+			{FaceSwapHead.FRAMED, FaceSwapHead.FRAMED_OSRS},
+			{FaceSwapHead.SOUP, FaceSwapHead.SOUP_OSRS}
+		};
+		for (FaceSwapHead[] pair : variants)
+		{
+			FaceSwapHead head = pair[0];
+			FaceSwapHead osrsHead = pair[1];
+			assertEquals(osrsHead, head.getOsrsVariant());
+			assertEquals(head, osrsHead.getBaseVariant());
+			assertEquals(List.of("default", "sad"), FaceSwapHeadImages.getAvailableStyleIds(head));
+			BufferedImage front = FaceSwapHeadImages.get(head, FaceSwapHeadDirection.FRONT);
+			BufferedImage back = FaceSwapHeadImages.get(head, FaceSwapHeadDirection.BACK);
+			BufferedImage sadFront = FaceSwapHeadImages.get(head, "sad", FaceSwapHeadDirection.FRONT);
+			assertNotSame(front, back);
+			assertNotSame(front, sadFront);
+			assertSame(back, FaceSwapHeadImages.get(head, "sad", FaceSwapHeadDirection.BACK));
+			assertSame(front, FaceSwapHeadImages.get(head, "crying", FaceSwapHeadDirection.FRONT));
+			assertSame(back, FaceSwapHeadImages.get(head, "crying", FaceSwapHeadDirection.BACK));
+			for (FaceSwapHeadDirection direction : FaceSwapHeadDirection.values())
+			{
+				BufferedImage image = FaceSwapHeadImages.get(head, direction);
+				assertEquals(512, image.getWidth());
+				assertEquals(512, image.getHeight());
+				BufferedImage sadImage = FaceSwapHeadImages.get(head, "sad", direction);
+				assertEquals(512, sadImage.getWidth());
+				assertEquals(512, sadImage.getHeight());
+			}
+
+			BufferedImage osrsFront = FaceSwapHeadImages.get(osrsHead, FaceSwapHeadDirection.FRONT);
+			BufferedImage osrsBack = FaceSwapHeadImages.get(osrsHead, FaceSwapHeadDirection.BACK);
+			assertNotSame(osrsFront, osrsBack);
+			for (FaceSwapHeadDirection direction : FaceSwapHeadDirection.values())
+			{
+				BufferedImage image = FaceSwapHeadImages.get(osrsHead, direction);
+				assertEquals(512, image.getWidth());
+				assertEquals(512, image.getHeight());
+			}
+		}
+	}
+
+	@Test
 	public void estimatesMissingSideAssetsFromFrontAndBack()
 	{
 		BufferedImage front = FaceSwapHeadImages.get(FaceSwapHead.ALFIE, FaceSwapHeadDirection.FRONT);
@@ -87,6 +132,7 @@ public class FaceSwapHeadImagesTest
 		java.util.List<String> expectedGnomonkeyStyles = java.util.List.of(
 			"default", "sad", "crying", "angry", "angel", "furious", "blushing", "sick", "in_love", "7tv");
 		java.util.List<String> expectedMaskStyles = java.util.List.of("default");
+		java.util.List<String> expectedNewCreatorStyles = java.util.List.of("default", "sad");
 		for (FaceSwapHead head : FaceSwapHead.values())
 		{
 			if (head.getCategory() != FaceSwapHeadCategory.CONTENT_CREATOR || !head.isReleaseAvailable())
@@ -98,7 +144,10 @@ public class FaceSwapHeadImagesTest
 				: head == FaceSwapHead.ODABLOCK
 				? expectedOdablockStyles
 				: head == FaceSwapHead.GNOMONKEY ? expectedGnomonkeyStyles
-				: head == FaceSwapHead.MRNOSLEEP_MASK ? expectedMaskStyles : expectedStyles;
+				: head == FaceSwapHead.MRNOSLEEP_MASK
+				? expectedMaskStyles
+				: head == FaceSwapHead.HANI || head == FaceSwapHead.FRAMED || head == FaceSwapHead.SOUP
+				? expectedNewCreatorStyles : expectedStyles;
 			assertEquals(head + " styles", styles, FaceSwapHeadImages.getAvailableStyleIds(head));
 			for (String styleId : styles)
 			{

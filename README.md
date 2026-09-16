@@ -19,6 +19,8 @@ Current release creators:
 - **TpapaSLICE:** [Kick](https://kick.com/tpapaslice) | [YouTube](https://www.youtube.com/@TpapaSLICE) | [Twitch](https://www.twitch.tv/tpapaslice) | [X](https://x.com/TpapaTV)
 - **Prison Joe:** [YouTube](https://www.youtube.com/@PJWIDTH) | [Twitch](https://www.twitch.tv/prisonjoe) | [X](https://x.com/Prison_Joseph)
 - **Gnomonkey:** [Kick](https://kick.com/gnomonkey) | [YouTube](https://www.youtube.com/@gnomonkeyrs) | [Twitch](https://www.twitch.tv/gnomonkey) | [X](https://x.com/GnomonkeyRS)
+- **Framed:** [Kick](https://kick.com/framed) | [YouTube](https://www.youtube.com/@FramedYT) | [Twitch](https://www.twitch.tv/framed) | [X](https://x.com/KFramed) | [Instagram](https://www.instagram.com/kev.framed/)
+- **Soup:** [YouTube](https://www.youtube.com/@SoupRS) | [Twitch](https://www.twitch.tv/Soup) | [X](https://x.com/SoupRS)
 - **ZeCookies:** [Kick](https://kick.com/zecookies) | [YouTube](https://www.youtube.com/@zecookiess) | [Twitch](https://www.twitch.tv/zecookies) | [X](https://x.com/zecookiess)
 - **Alfie:** [Kick](https://kick.com/alfie) | [YouTube](https://www.youtube.com/channel/UCEQoTuUGfulxInScbck1_Xw) | [Twitch](https://www.twitch.tv/alfie) | [X](https://x.com/RSAlfierules)
 - **King Condor:** [Kick](https://kick.com/kingcondor) | [YouTube](https://www.youtube.com/@KingCondor) | [Twitch](https://www.twitch.tv/kingcondor6969) | [X](https://x.com/KingCondor69)
@@ -34,8 +36,13 @@ Current release creators:
 - **The RS Felon:** [YouTube](https://www.youtube.com/joshpillault) | [Twitch](https://www.twitch.tv/jpillault) | [Linktree](https://linktr.ee/Joshpillault)
 - **Mr Nosleep:** [Kick](https://kick.com/mrnosleeposrs) | [YouTube](https://www.youtube.com/mrnosleeposrs) | [Twitch](https://www.twitch.tv/mrnosleep) | [Instagram](https://www.instagram.com/mrnosleep420)
 - **Sick Nerd:** [Kick](https://kick.com/sick_nerd) | [YouTube](https://youtube.com/sicknerd) | [Twitch](https://www.twitch.tv/sick_nerd) | [X](https://x.com/Sick_Nerd)
+- **Hani:** [Twitch](https://www.twitch.tv/hani) | [X](https://x.com/PositivelyHani) | [Discord](https://discord.gg/bpjUdfMJS3)
 
 ..and more to come upon request and approval
+
+Framed, Soup, and Hani use Standard and OSRS/block front/back portraits in the
+existing rendering modes. Each also includes a compressed Sad expression variant;
+existing creator reactions remain available.
 
 ## Screenshots
 

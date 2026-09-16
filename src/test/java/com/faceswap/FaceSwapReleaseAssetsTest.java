@@ -125,6 +125,59 @@ public class FaceSwapReleaseAssetsTest
 	}
 
 	@Test
+	public void newCreatorPairsAreNormalizedAndOpaqueInsideTheCutout() throws IOException
+	{
+		for (String head : new String[] {"hani", "framed", "soup"})
+		{
+			assertNormalizedCreatorPair("content_creators", head);
+			assertNormalizedCreatorAsset("content_creators", head + "_sad_front.png");
+			assertNormalizedCreatorPair("content_creators_3d", head + "_osrs");
+		}
+	}
+
+	private static void assertNormalizedCreatorPair(String directory, String stem) throws IOException
+	{
+		for (String direction : new String[] {"front", "back"})
+		{
+			assertNormalizedCreatorAsset(directory, stem + "_" + direction + ".png");
+		}
+	}
+
+	private static void assertNormalizedCreatorAsset(String directory, String filename) throws IOException
+	{
+		Path path = Path.of("src", "main", "resources", "heads", directory, filename);
+		assertTrue(filename + " must be packaged, not only available from dev-assets", Files.exists(path));
+		BufferedImage image = ImageIO.read(path.toFile());
+		assertNotNull(filename + " must be readable", image);
+		assertEquals(filename + " width", 512, image.getWidth());
+		assertEquals(filename + " height", 512, image.getHeight());
+		assertNoEnclosedTransparency(filename, image);
+		int visiblePixels = 0;
+		for (int y = 0; y < 512; y++)
+		{
+			for (int x = 0; x < 512; x++)
+			{
+				int argb = image.getRGB(x, y);
+				int alpha = argb >>> 24;
+				if (x < 16 || y < 16 || x >= 496 || y >= 496)
+				{
+					assertEquals(filename + " must have transparent padding", 0, alpha);
+				}
+				if (alpha > 24)
+				{
+					visiblePixels++;
+					int red = (argb >>> 16) & 0xFF;
+					int green = (argb >>> 8) & 0xFF;
+					int blue = argb & 0xFF;
+					assertFalse(filename + " must not contain chroma-key fringe",
+						green > 100 && green > red * 1.35 && green > blue * 1.35);
+				}
+			}
+		}
+		assertTrue(filename + " must contain visible artwork", visiblePixels > 50000);
+	}
+
+	@Test
 	public void brettDogAssetsDoNotContainEnclosedTransparency() throws IOException
 	{
 		for (String filename : new String[] {

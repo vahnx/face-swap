@@ -37,6 +37,22 @@ Snapshot date: 2026-08-30
 
 The following entries did not expose a reliable current count from the linked pages during this snapshot: `Faux`, `Alfie`, `TpapaSLICE`, `Grim`, `The RS Felon`, `Mr Nosleep`, and `Sick Nerd`. Their relative positions are retained until a direct, attributable count is available. The ski-mask entry is a separate visual variant of Mr Nosleep rather than a separate audience.
 
+## New Creator Snapshot: 2026-09-16
+
+| Creator | Platform | Approximate audience | Source |
+| --- | --- | ---: | --- |
+| Framed | YouTube | 510,000 subscribers | [Channel tracker](https://socialblade.com/youtube/channel/UC8izSARsEi6M9Js5gf54xNA) |
+| Soup | YouTube | 464,000 subscribers | [Channel tracker](https://socialblade.com/youtube/handle/souprs) |
+| Hani | Twitch | 10,429 followers | [Streamer profile](https://www.twitchmetrics.net/c/151347527-hani) |
+
+These are the latest publicly retrievable tracker snapshots checked on September 16,
+not exact live counts (Framed: September 4; Soup: September 1; Hani: early September).
+The README and popup preserve the established curated order: Framed and Soup follow
+Gnomonkey, while Hani follows Sick Nerd. Existing creators retain their relative
+order. These three additions have Standard and OSRS/block front/back portraits,
+plus a compressed Sad front expression. Their portraits support the existing
+rendering modes.
+
 ## Ordering Policy
 
-The popup uses a manually curated approximate popularity order, not a live network lookup. For a creator with multiple platforms, use the largest credible public audience figure as the primary placement signal, then apply reasonable judgment for platform overlap and retain prior relative placement where a count cannot be verified.
+The README and popup use a manually curated approximate popularity order, not a live network lookup. Public audience figures inform placement, but counts are not directly comparable across platforms. Apply reasonable judgment for platform overlap and OSRS audience reach, and retain prior relative placement where a count cannot be verified.

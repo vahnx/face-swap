@@ -26,6 +26,12 @@ public enum FaceSwapHead
 	MRNOSLEEP("Mr Nosleep", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	MRNOSLEEP_MASK("Mr Nosleep (Ski Mask)", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
 	SICK_NERD("Sick Nerd", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
+	HANI("Hani", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
+	FRAMED("Framed", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
+	SOUP("Soup", FaceSwapHeadCategory.CONTENT_CREATOR, true, true),
+	FRAMED_OSRS("Framed (OSRS)", FaceSwapHeadCategory.CONTENT_CREATOR_3D, true, true),
+	SOUP_OSRS("Soup (OSRS)", FaceSwapHeadCategory.CONTENT_CREATOR_3D, true, true),
+	HANI_OSRS("Hani (OSRS)", FaceSwapHeadCategory.CONTENT_CREATOR_3D, true, true),
 	GNOMONKEY_OSRS("Gnomonkey (OSRS)", FaceSwapHeadCategory.CONTENT_CREATOR_3D, true, true),
 	ODABLOCK_OSRS("Odablock (OSRS)", FaceSwapHeadCategory.CONTENT_CREATOR_3D, true, true),
 	SARDACO_OSRS("Sardaco (OSRS)", FaceSwapHeadCategory.CONTENT_CREATOR_3D, true, true),
@@ -122,6 +128,9 @@ public enum FaceSwapHead
 	{
 		switch (this)
 		{
+			case FRAMED: return FRAMED_OSRS;
+			case SOUP: return SOUP_OSRS;
+			case HANI: return HANI_OSRS;
 			case GNOMONKEY: return GNOMONKEY_OSRS;
 			case ODABLOCK: return ODABLOCK_OSRS;
 			case SARDACO: return SARDACO_OSRS;
@@ -152,6 +161,9 @@ public enum FaceSwapHead
 		{
 			switch (this)
 		{
+			case FRAMED_OSRS: return FRAMED;
+			case SOUP_OSRS: return SOUP;
+			case HANI_OSRS: return HANI;
 			case GNOMONKEY_OSRS: return GNOMONKEY;
 			case MRNOSLEEP_MASK: return MRNOSLEEP;
 			case ODABLOCK_OSRS: return ODABLOCK;

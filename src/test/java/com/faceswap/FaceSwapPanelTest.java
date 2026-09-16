@@ -60,6 +60,9 @@ public class FaceSwapPanelTest
 			FaceSwapHead.ASIAN_ANDY,
 			FaceSwapHead.MINT_MADCOW,
 			FaceSwapHead.JOSH_PILLAUT,
+			FaceSwapHead.FRAMED_OSRS,
+			FaceSwapHead.SOUP_OSRS,
+			FaceSwapHead.HANI_OSRS,
 			FaceSwapHead.MINT_MADCOW_OSRS,
 			FaceSwapHead.BRETTDOG_OSRS,
 			FaceSwapHead.MMORPG_OSRS,
@@ -75,8 +78,14 @@ public class FaceSwapPanelTest
 		}
 		assertEquals(FaceSwapHead.ODABLOCK, heads.get(0));
 		assertEquals(FaceSwapHead.GNOMONKEY, heads.get(6));
-		assertEquals(FaceSwapHead.ODABLOCK_OSRS, heads.get(22));
-		assertEquals(FaceSwapHead.GNOMONKEY_OSRS, heads.get(28));
+		assertEquals(FaceSwapHead.FRAMED, heads.get(7));
+		assertEquals(FaceSwapHead.SOUP, heads.get(8));
+		assertEquals(FaceSwapHead.HANI, heads.get(24));
+		assertEquals(FaceSwapHead.ODABLOCK_OSRS, heads.get(25));
+		assertEquals(FaceSwapHead.GNOMONKEY_OSRS, heads.get(31));
+		assertEquals(FaceSwapHead.FRAMED_OSRS, heads.get(32));
+		assertEquals(FaceSwapHead.SOUP_OSRS, heads.get(33));
+		assertEquals(FaceSwapHead.HANI_OSRS, heads.get(50));
 		assertTrue(heads.contains(FaceSwapHead.MRNOSLEEP));
 		assertTrue(heads.contains(FaceSwapHead.SICK_NERD));
 		assertTrue(heads.contains(FaceSwapHead.JOSH_PILLAUT));
@@ -109,6 +118,12 @@ public class FaceSwapPanelTest
 		assertEquals(FaceSwapHead.MRNOSLEEP, FaceSwapHead.MRNOSLEEP_OSRS.getBaseVariant());
 		assertEquals(FaceSwapHead.SICK_NERD_OSRS, FaceSwapHead.SICK_NERD.getOsrsVariant());
 		assertEquals(FaceSwapHead.SICK_NERD, FaceSwapHead.SICK_NERD_OSRS.getBaseVariant());
+		assertEquals(FaceSwapHead.FRAMED_OSRS, FaceSwapHead.FRAMED.getOsrsVariant());
+		assertEquals(FaceSwapHead.FRAMED, FaceSwapHead.FRAMED_OSRS.getBaseVariant());
+		assertEquals(FaceSwapHead.SOUP_OSRS, FaceSwapHead.SOUP.getOsrsVariant());
+		assertEquals(FaceSwapHead.SOUP, FaceSwapHead.SOUP_OSRS.getBaseVariant());
+		assertEquals(FaceSwapHead.HANI_OSRS, FaceSwapHead.HANI.getOsrsVariant());
+		assertEquals(FaceSwapHead.HANI, FaceSwapHead.HANI_OSRS.getBaseVariant());
 	}
 
 	@Test

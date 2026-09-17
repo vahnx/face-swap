@@ -1,6 +1,6 @@
 package com.faceswap;
 
-enum FaceSwapHeadCategory
+public enum FaceSwapHeadCategory
 {
 	FICTIONAL_CHARACTER("Fictional Characters", "fictional_characters"),
 	EMOJI("Emojis", "emojis"),

@@ -26,4 +26,15 @@ public class FaceSwapOverlayTest
 		assertFalse(FaceSwapOverlay.isBunnyHopAnimation(
 			net.runelite.api.gameval.AnimationID.EMOTE_JUMP_WITH_JOY));
 	}
+
+	@Test
+	public void detectsHomeTeleportAnimationIds()
+	{
+		assertTrue(FaceSwapOverlay.isWraparoundTeleportAnimation(
+			net.runelite.api.AnimationID.BOOK_HOME_TELEPORT_1));
+		assertTrue(FaceSwapOverlay.isWraparoundTeleportAnimation(
+			net.runelite.api.gameval.AnimationID.HOME_TELEPORT_HUMAN_FIRE_5));
+		assertFalse(FaceSwapOverlay.isWraparoundTeleportAnimation(
+			net.runelite.api.gameval.AnimationID.EMOTE_WAVE));
+	}
 }

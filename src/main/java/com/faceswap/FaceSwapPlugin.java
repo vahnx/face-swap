@@ -43,6 +43,7 @@ import net.runelite.api.Animation;
 import net.runelite.api.AnimationController;
 import net.runelite.api.Actor;
 import net.runelite.api.EquipmentInventorySlot;
+import net.runelite.api.Hitsplat;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
@@ -61,8 +62,12 @@ import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.events.ClientTick;
 import net.runelite.api.events.BeforeRender;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.NpcDespawned;
+import net.runelite.api.events.NpcSpawned;
 import net.runelite.api.kit.KitType;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigManager;
@@ -120,7 +125,8 @@ public class FaceSwapPlugin extends Plugin
 		"blood moon helm",
 		"crystal helm",
 		"blue moon helm",
-		"graceful hood"
+		"graceful hood",
+		"frog mask"
 	);
 	private static final int RIGGED_HEAD_MODEL_ID = 47666;
 	private static final int RIGGED_JAW_MODEL_ID = 249;
@@ -132,6 +138,29 @@ public class FaceSwapPlugin extends Plugin
 	private static final int[] MALE_ANCHOR_MODEL_IDS = {28515, 26632, 176, 28285, 181};
 	private static final String EDITED_HEAD_VERTICES = "/models/dense_rigged_player_head_vertices.csv";
 	private static final int MED_HELM_FACE_DROP = 10;
+	private static final Set<String> HAT_LIKE_ITEM_NAME_PARTS = Set.of(
+		"hat",
+		"helmet",
+		"helm",
+		"hood",
+		"cap",
+		"crown",
+		"tiara",
+		"halo",
+		"bandana",
+		"headband",
+		"circlet",
+		"wig",
+		"beret",
+		"headdress",
+		"mitre",
+		"coif");
+	private static final int MOVEMENT_STYLE_INTERVAL_CLIENT_TICKS = 40;
+	private static final int EXPRESSION_REACTION_HOLD_CLIENT_TICKS = 30;
+	private static final List<String> MOVEMENT_STYLE_IDS = Collections.unmodifiableList(Arrays.asList(
+		FaceSwapAssignment.DEFAULT_STYLE_ID,
+		"blushing",
+		"in_love"));
 	private static final Set<Integer> FACE_COVERING_HEAD_ITEMS = Set.of(
 		ItemID.IRON_FULL_HELM,
 		ItemID.BRONZE_FULL_HELM,
@@ -259,6 +288,20 @@ public class FaceSwapPlugin extends Plugin
 	private String lastPanelStatus;
 	private String lastPanelTargetNames;
 	private final AtomicBoolean panelRefreshQueued = new AtomicBoolean();
+	private FaceSwapHead movementCycleHead;
+	private String movementCycleStyleId = FaceSwapAssignment.DEFAULT_STYLE_ID;
+	private int movementCycleTicks;
+	private int lastMovementX = Integer.MIN_VALUE;
+	private int lastMovementY = Integer.MIN_VALUE;
+	private boolean playerWasMoving;
+	private final Map<Player, MovementCycleState> otherMovementCycles = new IdentityHashMap<>();
+	private final Set<NPC> movementTrackedNpcs = Collections.newSetFromMap(new IdentityHashMap<>());
+	private final Map<NPC, MovementCycleState> npcMovementCycles = new IdentityHashMap<>();
+	private boolean movementTrackedNpcsInitialized;
+	private String localReactionStyleId;
+	private int localReactionTicks;
+	private boolean nextDamageTakenCrying = true;
+	private boolean nextDamageDealtAngry = true;
 	private ExecutorService customImageExecutor;
 	private FaceSwapCalibrationMouseListener calibrationMouseListener;
 
@@ -297,6 +340,10 @@ public class FaceSwapPlugin extends Plugin
 		customImageExecutor.submit(() ->
 		{
 			customImageStore.load();
+			ensureTargetCustomImages(
+				FaceSwapHead.CUSTOM, getConfiguredTargetNames(FaceSwapHead.CUSTOM), false);
+			ensureTargetCustomImages(
+				FaceSwapHead.CUSTOM, getConfiguredNpcTargetNames(FaceSwapHead.CUSTOM), true);
 			try
 			{
 				HelmetProfiles.loadRuntimeProfiles();
@@ -315,6 +362,14 @@ public class FaceSwapPlugin extends Plugin
 			}
 			clientThread.invoke(() ->
 			{
+				SwingUtilities.invokeLater(() ->
+				{
+					FaceSwapPanel currentPanel = panel;
+					if (currentPanel != null)
+					{
+						currentPanel.refreshCustomHeadPickerIfOpen();
+					}
+				});
 				if (config.interactiveHelmetCalibration())
 				{
 					ensureInteractiveHelmetCalibration(client.getLocalPlayer(),
@@ -395,6 +450,26 @@ public class FaceSwapPlugin extends Plugin
 		panel = null;
 		navigationButton = null;
 		log.debug("Face Swap stopped");
+	}
+
+	@Override
+	public void resetConfiguration()
+	{
+		for (String key : new ArrayList<>(configManager.getConfigurationKeys(CONFIG_GROUP)))
+		{
+			configManager.unsetConfiguration(CONFIG_GROUP, key);
+		}
+
+		playerHeadAssignments = null;
+		npcHeadAssignments = null;
+		pickPlayerMode = false;
+		hoveredPickActor = null;
+		movementTrackedNpcs.clear();
+		movementTrackedNpcsInitialized = false;
+		resetMovementStyleCycle();
+		clearPrototype3dModelCache();
+		removePrototype3dInstances();
+		refreshPanel();
 	}
 
 	private void migrateHeadNames()
@@ -503,6 +578,418 @@ public class FaceSwapPlugin extends Plugin
 		return isHeadAvailable(selectedHead) ? selectedHead : FaceSwapHead.SARDACO;
 	}
 
+	FaceSwapAssignment getEffectiveSelectedAssignment()
+	{
+		return getLocalDynamicAssignment(getConfiguredSelectedAssignment());
+	}
+
+	String getDefaultStyleId(FaceSwapHead head)
+	{
+		return getConfiguredDefaultStyleId(head);
+	}
+
+	private FaceSwapAssignment getConfiguredSelectedAssignment()
+	{
+		FaceSwapHead selectedHead = getEffectiveSelectedHead();
+		String customImageId = selectedHead == FaceSwapHead.CUSTOM ? customImageStore.getSelectedId() : null;
+		return new FaceSwapAssignment(
+			selectedHead, getConfiguredDefaultStyleId(selectedHead), getRenderMode(), customImageId);
+	}
+
+	BufferedImage getAssignmentImage(FaceSwapAssignment assignment, FaceSwapHeadDirection direction)
+	{
+		return assignment == null ? null : getAssignmentImage(
+			assignment.getHead(), assignment.getStyleId(), assignment.getCustomImageId(), direction);
+	}
+
+	Color getAssignmentAverageColor(FaceSwapAssignment assignment, FaceSwapHeadDirection direction)
+	{
+		return assignment == null ? Color.BLACK : getAssignmentAverageColor(
+			assignment.getHead(), assignment.getStyleId(), assignment.getCustomImageId(), direction);
+	}
+
+	private BufferedImage getAssignmentImage(
+		FaceSwapHead head, String styleId, String customImageId, FaceSwapHeadDirection direction)
+	{
+		if (head == FaceSwapHead.CUSTOM)
+		{
+			return FaceSwapHeadImages.getCustomImage(
+				customImageStore.getImage(customImageId), customImageStore.getBackImage(customImageId), direction);
+		}
+		return FaceSwapHeadImages.get(head, styleId, direction);
+	}
+
+	private Color getAssignmentAverageColor(
+		FaceSwapHead head, String styleId, String customImageId, FaceSwapHeadDirection direction)
+	{
+		if (head == FaceSwapHead.CUSTOM)
+		{
+			return FaceSwapHeadImages.getCustomAverageColor(
+				customImageStore.getImage(customImageId), customImageStore.getBackImage(customImageId), direction);
+		}
+		return FaceSwapHeadImages.getAverageColor(head, styleId, direction);
+	}
+
+	FaceSwapRenderMode getAssignmentRenderMode(FaceSwapAssignment assignment)
+	{
+		return assignment == null || assignment.getRenderMode() == null
+			? getRenderMode()
+			: assignment.getRenderMode();
+	}
+
+	private static FaceSwapAssignment withStyle(FaceSwapAssignment assignment, String styleId)
+	{
+		return new FaceSwapAssignment(
+			assignment.getHead(), styleId, assignment.getRenderMode(), assignment.getCustomImageId());
+	}
+
+	private FaceSwapAssignment getLocalDynamicAssignment(FaceSwapAssignment assignment)
+	{
+		if (assignment == null || !shouldCycleCreatorStyles(assignment.getHead()))
+		{
+			return assignment;
+		}
+
+		FaceSwapHead head = assignment.getHead();
+		if (client.getVarpValue(VarPlayerID.POISON) > 0
+			&& FaceSwapHeadImages.isStyleAvailable(head, "sick"))
+		{
+			return withStyle(assignment, "sick");
+		}
+		if (localReactionTicks > 0
+			&& FaceSwapHeadImages.isStyleAvailable(head, localReactionStyleId))
+		{
+			return withStyle(assignment, localReactionStyleId);
+		}
+		if (playerWasMoving && movementCycleHead == head
+			&& FaceSwapHeadImages.isStyleAvailable(head, movementCycleStyleId))
+		{
+			return withStyle(assignment, movementCycleStyleId);
+		}
+		return assignment;
+	}
+
+	private FaceSwapAssignment getLocalDynamicAssignment(Player player, FaceSwapAssignment assignment)
+	{
+		if (player == client.getLocalPlayer())
+		{
+			return getLocalDynamicAssignment(assignment);
+		}
+		return getOtherMovementAssignment(player, assignment);
+	}
+
+	private FaceSwapAssignment getOtherMovementAssignment(Player player, FaceSwapAssignment assignment)
+	{
+		if (assignment == null || !shouldCycleCreatorStyles(assignment.getHead()))
+		{
+			return assignment;
+		}
+
+		MovementCycleState state = otherMovementCycles.get(player);
+		if (state != null && state.moving && state.head == assignment.getHead()
+			&& FaceSwapHeadImages.isStyleAvailable(assignment.getHead(), state.styleId))
+		{
+			return withStyle(assignment, state.styleId);
+		}
+		return assignment;
+	}
+
+	private FaceSwapAssignment getNpcMovementAssignment(NPC npc, FaceSwapAssignment assignment)
+	{
+		if (assignment == null || !shouldCycleCreatorStyles(assignment.getHead()))
+		{
+			return assignment;
+		}
+
+		MovementCycleState state = npcMovementCycles.get(npc);
+		if (state != null && state.moving && state.head == assignment.getHead()
+			&& FaceSwapHeadImages.isStyleAvailable(assignment.getHead(), state.styleId))
+		{
+			return withStyle(assignment, state.styleId);
+		}
+		return assignment;
+	}
+
+	private String getConfiguredDefaultStyleId(FaceSwapHead head)
+	{
+		String configuredStyle = configManager.getConfiguration(CONFIG_GROUP, defaultStyleKey(head));
+		String normalizedStyle = FaceSwapAssignment.normalizeStyleId(configuredStyle);
+		return FaceSwapHeadImages.isStyleAvailable(head, normalizedStyle)
+			? normalizedStyle
+			: FaceSwapAssignment.DEFAULT_STYLE_ID;
+	}
+
+	private boolean shouldCycleCreatorStyles(FaceSwapHead head)
+	{
+		return config != null
+			&& cycleCreatorStylesWhileMoving()
+			&& head != null
+			&& FaceSwapHeadImages.getAvailableStyleIds(head).size() > 1;
+	}
+
+	boolean cycleCreatorStylesWhileMoving()
+	{
+		return Boolean.parseBoolean(configManager.getConfiguration(
+			CONFIG_GROUP, "cycleCreatorStylesWhileMoving"));
+	}
+
+	static String nextMovementStyleId(List<String> styleIds, String currentStyleId, int selection)
+	{
+		String normalizedCurrent = FaceSwapAssignment.normalizeStyleId(currentStyleId);
+		List<String> candidates = styleIds.stream()
+			.filter(styleId -> !styleId.equals(normalizedCurrent))
+			.collect(Collectors.toList());
+		if (candidates.isEmpty())
+		{
+			return normalizedCurrent;
+		}
+		return candidates.get(Math.floorMod(selection, candidates.size()));
+	}
+
+	private void updateMovementStyle(Player localPlayer)
+	{
+		FaceSwapHead selectedHead = getEffectiveSelectedHead();
+		if (client.getGameState() != GameState.LOGGED_IN || localPlayer == null
+			|| !shouldCycleCreatorStyles(selectedHead))
+		{
+			resetMovementStyleCycle();
+			return;
+		}
+
+		LocalPoint location = localPlayer.getLocalLocation();
+		if (location == null)
+		{
+			return;
+		}
+		boolean moved = lastMovementX != Integer.MIN_VALUE
+			&& (location.getX() != lastMovementX || location.getY() != lastMovementY);
+		lastMovementX = location.getX();
+		lastMovementY = location.getY();
+		if (!moved)
+		{
+			if (playerWasMoving)
+			{
+				playerWasMoving = false;
+				movementCycleHead = selectedHead;
+				movementCycleStyleId = getConfiguredDefaultStyleId(selectedHead);
+				movementCycleTicks = 0;
+				refreshPanel();
+			}
+			return;
+		}
+
+		if (!playerWasMoving || movementCycleHead != selectedHead)
+		{
+			playerWasMoving = true;
+			movementCycleHead = selectedHead;
+			String configuredStyleId = getConfiguredDefaultStyleId(selectedHead);
+			movementCycleStyleId = MOVEMENT_STYLE_IDS.contains(configuredStyleId)
+				? configuredStyleId
+				: FaceSwapAssignment.DEFAULT_STYLE_ID;
+			movementCycleTicks = 0;
+		}
+		movementCycleTicks++;
+		if (movementCycleTicks >= MOVEMENT_STYLE_INTERVAL_CLIENT_TICKS)
+		{
+			movementCycleTicks = 0;
+			movementCycleStyleId = nextMovementCycleStyleId(movementCycleStyleId);
+			refreshPanel();
+		}
+	}
+
+	private void updateOtherMovementStyles()
+	{
+		if (client.getGameState() != GameState.LOGGED_IN || !cycleCreatorStylesWhileMoving())
+		{
+			otherMovementCycles.clear();
+			return;
+		}
+
+		Set<Player> visiblePlayers = Collections.newSetFromMap(new IdentityHashMap<>());
+		visiblePlayers.addAll(client.getPlayers());
+		Player localPlayer = client.getLocalPlayer();
+		for (Player player : visiblePlayers)
+		{
+			if (player == localPlayer)
+			{
+				continue;
+			}
+
+			FaceSwapAssignment assignment = getConfiguredAssignedAssignment(player);
+			if (assignment == null || !shouldCycleCreatorStyles(assignment.getHead()))
+			{
+				otherMovementCycles.remove(player);
+				continue;
+			}
+
+			LocalPoint location = player.getLocalLocation();
+			if (location == null)
+			{
+				otherMovementCycles.remove(player);
+				continue;
+			}
+
+			MovementCycleState state = otherMovementCycles.computeIfAbsent(
+				player, ignored -> new MovementCycleState());
+			boolean moved = state.lastX != Integer.MIN_VALUE
+				&& (location.getX() != state.lastX || location.getY() != state.lastY);
+			state.lastX = location.getX();
+			state.lastY = location.getY();
+			if (!moved)
+			{
+				if (state.moving)
+				{
+					state.moving = false;
+					state.head = assignment.getHead();
+					state.styleId = movementStartingStyle(assignment.getStyleId());
+					state.ticks = 0;
+				}
+				continue;
+			}
+
+			if (!state.moving || state.head != assignment.getHead())
+			{
+				state.moving = true;
+				state.head = assignment.getHead();
+				state.styleId = movementStartingStyle(assignment.getStyleId());
+				state.ticks = 0;
+			}
+			state.ticks++;
+			if (state.ticks >= MOVEMENT_STYLE_INTERVAL_CLIENT_TICKS)
+			{
+				state.ticks = 0;
+				state.styleId = nextMovementCycleStyleId(state.styleId);
+			}
+		}
+
+		for (java.util.Iterator<Player> iterator = otherMovementCycles.keySet().iterator(); iterator.hasNext();)
+		{
+			if (!visiblePlayers.contains(iterator.next()))
+			{
+				iterator.remove();
+			}
+		}
+	}
+
+	private void updateNpcMovementStyles()
+	{
+		if (client.getGameState() != GameState.LOGGED_IN || !cycleCreatorStylesWhileMoving())
+		{
+			npcMovementCycles.clear();
+			return;
+		}
+
+		if (!movementTrackedNpcsInitialized)
+		{
+			for (NPC npc : client.getNpcs())
+			{
+				if (npc != null)
+				{
+					movementTrackedNpcs.add(npc);
+				}
+			}
+			movementTrackedNpcsInitialized = true;
+		}
+
+		for (NPC npc : new ArrayList<>(movementTrackedNpcs))
+		{
+			FaceSwapAssignment assignment = getConfiguredNpcAssignment(npc);
+			if (assignment == null || !shouldCycleCreatorStyles(assignment.getHead()))
+			{
+				npcMovementCycles.remove(npc);
+				continue;
+			}
+
+			LocalPoint location = npc.getLocalLocation();
+			if (location == null)
+			{
+				npcMovementCycles.remove(npc);
+				continue;
+			}
+
+			MovementCycleState state = npcMovementCycles.computeIfAbsent(
+				npc, ignored -> new MovementCycleState());
+			boolean moved = state.lastX != Integer.MIN_VALUE
+				&& (location.getX() != state.lastX || location.getY() != state.lastY);
+			state.lastX = location.getX();
+			state.lastY = location.getY();
+			if (!moved)
+			{
+				if (state.moving)
+				{
+					state.moving = false;
+					state.head = assignment.getHead();
+					state.styleId = movementStartingStyle(assignment.getStyleId());
+					state.ticks = 0;
+				}
+				continue;
+			}
+
+			if (!state.moving || state.head != assignment.getHead())
+			{
+				state.moving = true;
+				state.head = assignment.getHead();
+				state.styleId = movementStartingStyle(assignment.getStyleId());
+				state.ticks = 0;
+			}
+			state.ticks++;
+			if (state.ticks >= MOVEMENT_STYLE_INTERVAL_CLIENT_TICKS)
+			{
+				state.ticks = 0;
+				state.styleId = nextMovementCycleStyleId(state.styleId);
+			}
+		}
+	}
+
+	private String movementStartingStyle(String styleId)
+	{
+		String normalizedStyleId = FaceSwapAssignment.normalizeStyleId(styleId);
+		return MOVEMENT_STYLE_IDS.contains(normalizedStyleId)
+			? normalizedStyleId
+			: FaceSwapAssignment.DEFAULT_STYLE_ID;
+	}
+
+	static String nextMovementCycleStyleId(String currentStyleId)
+	{
+		int currentIndex = MOVEMENT_STYLE_IDS.indexOf(FaceSwapAssignment.normalizeStyleId(currentStyleId));
+		return MOVEMENT_STYLE_IDS.get((currentIndex + 1) % MOVEMENT_STYLE_IDS.size());
+	}
+
+	private void resetMovementStyleCycle()
+	{
+		boolean changed = movementCycleHead != null
+			&& !FaceSwapAssignment.DEFAULT_STYLE_ID.equals(movementCycleStyleId);
+		movementCycleHead = null;
+		movementCycleStyleId = FaceSwapAssignment.DEFAULT_STYLE_ID;
+		movementCycleTicks = 0;
+		lastMovementX = Integer.MIN_VALUE;
+		lastMovementY = Integer.MIN_VALUE;
+		playerWasMoving = false;
+		otherMovementCycles.clear();
+		npcMovementCycles.clear();
+		localReactionStyleId = null;
+		localReactionTicks = 0;
+		nextDamageTakenCrying = true;
+		nextDamageDealtAngry = true;
+		if (changed)
+		{
+			refreshPanel();
+		}
+	}
+
+	private void updateLocalReaction()
+	{
+		if (localReactionTicks > 0)
+		{
+			localReactionTicks--;
+			if (localReactionTicks == 0)
+			{
+				localReactionStyleId = null;
+				refreshPanel();
+			}
+		}
+	}
+
 	private boolean isDebugLaunch()
 	{
 		return developerMode;
@@ -518,22 +1005,96 @@ public class FaceSwapPlugin extends Plugin
 		return config.tabbedHeadPicker();
 	}
 
+	FaceSwapHeadPickerLayout getHeadPickerLayout()
+	{
+		return config.headPickerLayout();
+	}
+
+	FaceSwapHeadCategory getLastHeadPickerCategory()
+	{
+		FaceSwapHeadCategory category = config.lastHeadPickerCategory();
+		return category == null ? FaceSwapHeadCategory.CONTENT_CREATOR : category;
+	}
+
+	void setLastHeadPickerCategory(FaceSwapHeadCategory category)
+	{
+		if (category != null)
+		{
+			configManager.setConfiguration(CONFIG_GROUP, "lastHeadPickerCategory", category);
+		}
+	}
+
+	boolean shouldOpenHeadPickerOnFirstUse()
+	{
+		return configManager.getConfiguration(CONFIG_GROUP, "headPickerOpened") == null;
+	}
+
+	void markHeadPickerOpened()
+	{
+		configManager.setConfiguration(CONFIG_GROUP, "headPickerOpened", true);
+	}
+
 	boolean isPrototype3dEnabled()
 	{
 		return config.renderMode() == FaceSwapRenderMode.THREE_D;
 	}
 
+	boolean isDkMode()
+	{
+		return config.dkMode();
+	}
+
+	boolean shouldRenderDkModeHat(Player player)
+	{
+		if (!config.dkMode() || player == null)
+		{
+			return false;
+		}
+
+		int itemId = getPlayerHeadItemId(player);
+		if (itemId <= 0 || isFaceCoveringHeadItem(itemId))
+		{
+			return false;
+		}
+
+		ItemComposition itemComposition = client.getItemDefinition(itemId);
+		return itemComposition != null && isHatLikeHeadItemName(itemComposition.getName());
+	}
+
+	static boolean isHatLikeHeadItemName(String itemName)
+	{
+		if (itemName == null)
+		{
+			return false;
+		}
+
+		String normalizedName = itemName.toLowerCase(Locale.ROOT);
+		if (normalizedName.contains("full helm") || normalizedName.contains("full helmet"))
+		{
+			return false;
+		}
+		for (String namePart : HAT_LIKE_ITEM_NAME_PARTS)
+		{
+			if (normalizedName.contains(namePart))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	boolean isInteractiveCalibrationActive()
 	{
 		Player player = client.getLocalPlayer();
+		FaceSwapAssignment assignment = getAssignedAssignment(player);
 		return developerMode
 			&& config.interactiveHelmetCalibration()
-			&& isPrototype3dEnabled()
+			&& getAssignmentRenderMode(assignment) == FaceSwapRenderMode.THREE_D
 			&& client.getGameState() == GameState.LOGGED_IN
 			&& player != null
 			&& interactiveHelmetCalibration != null
 			&& interactiveHelmetCalibrationItemId == getLocalHeadItemId(player)
-			&& getAssignedHead(player) != null
+			&& assignment != null
 			&& !hasFaceCoveringHeadgear(player);
 	}
 
@@ -663,6 +1224,30 @@ public class FaceSwapPlugin extends Plugin
 			// remain active. Clear the instances so the next logged-in tick recreates them.
 			removePrototype3dInstances();
 			removeMaskTrackingRigs();
+			resetMovementStyleCycle();
+			movementTrackedNpcs.clear();
+			movementTrackedNpcsInitialized = false;
+		}
+	}
+
+	@Subscribe
+	public void onNpcSpawned(NpcSpawned event)
+	{
+		NPC npc = event.getNpc();
+		if (npc != null)
+		{
+			movementTrackedNpcs.add(npc);
+		}
+	}
+
+	@Subscribe
+	public void onNpcDespawned(NpcDespawned event)
+	{
+		NPC npc = event.getNpc();
+		if (npc != null)
+		{
+			movementTrackedNpcs.remove(npc);
+			npcMovementCycles.remove(npc);
 		}
 	}
 
@@ -670,12 +1255,17 @@ public class FaceSwapPlugin extends Plugin
 	public void onClientTick(ClientTick event)
 	{
 		Player localPlayer = client.getLocalPlayer();
+		FaceSwapAssignment localAssignment = getAssignedAssignment(localPlayer);
+		boolean localUses3d = getAssignmentRenderMode(localAssignment) == FaceSwapRenderMode.THREE_D;
+		updateMovementStyle(localPlayer);
+		updateOtherMovementStyles();
+		updateNpcMovementStyles();
+		updateLocalReaction();
 		updateHoveredPickActor();
 		updatePrototype3dHeadItemDebug(localPlayer);
 		updateRadiusPlayerNames();
 		refreshPanelStatusIfChanged();
-		if (config.renderMode() == FaceSwapRenderMode.MASK
-			&& getMaskTrackingMode() != MaskTrackingMode.MERGED_MODEL
+		if (getMaskTrackingMode() != MaskTrackingMode.MERGED_MODEL
 			&& client.getGameState() == GameState.LOGGED_IN
 			&& localPlayer != null)
 		{
@@ -685,7 +1275,7 @@ public class FaceSwapPlugin extends Plugin
 		{
 			removeMaskTrackingRigs();
 		}
-		if (!isPrototype3dEnabled() || client.getGameState() != GameState.LOGGED_IN || localPlayer == null)
+		if (client.getGameState() != GameState.LOGGED_IN || localPlayer == null)
 		{
 			removePrototype3dInstances();
 			return;
@@ -699,17 +1289,24 @@ public class FaceSwapPlugin extends Plugin
 			interactiveHelmetCalibrationItemId = Integer.MIN_VALUE;
 			interactiveHelmetCalibration = null;
 		}
-		ensureInteractiveHelmetCalibration(localPlayer, localHeadItemId);
+		if (localUses3d)
+		{
+			ensureInteractiveHelmetCalibration(localPlayer, localHeadItemId);
+		}
+		else
+		{
+			interactiveHelmetCalibration = null;
+			interactiveHelmetCalibrationItemId = Integer.MIN_VALUE;
+		}
 
 		Set<Actor> activeActors = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (Player player : client.getPlayers())
 		{
-			FaceSwapHead assignedHead = getAssignedHead(player);
-			updatePrototype3dInstance(player, assignedHead, localPlayer, activeActors);
+			updatePrototype3dInstance(player, getAssignedAssignment(player), localPlayer, activeActors);
 		}
 		for (NPC npc : client.getNpcs())
 		{
-			updatePrototype3dInstance(npc, getAssignedHead(npc), localPlayer, activeActors);
+			updatePrototype3dInstance(npc, getAssignedAssignment(npc), localPlayer, activeActors);
 		}
 
 		for (Actor actor : new ArrayList<>(prototype3dInstances.keySet()))
@@ -725,11 +1322,14 @@ public class FaceSwapPlugin extends Plugin
 
 	private void updatePrototype3dInstance(
 		Actor actor,
-		FaceSwapHead assignedHead,
+		FaceSwapAssignment assignment,
 		Player localPlayer,
 		Set<Actor> activeActors)
 	{
-		if (assignedHead == null || actor.getLocalLocation() == null)
+		FaceSwapHead assignedHead = assignment == null ? null : assignment.getHead();
+		if (assignedHead == null
+			|| getAssignmentRenderMode(assignment) != FaceSwapRenderMode.THREE_D
+			|| actor.getLocalLocation() == null)
 		{
 			return;
 		}
@@ -751,8 +1351,8 @@ public class FaceSwapPlugin extends Plugin
 		int calibratedHeight = interactiveCalibration != null ? interactiveCalibration.getY()
 			: useHelmetProfile ? helmetProfile.getModelY() : config.prototype3dY();
 		int globalYShift = resolvePrototypeGlobalYShift(headItemId > 0, config.prototype3dGlobalYShift());
-		int height = clamp(calibratedHeight - clamp(globalYShift, -32, 32), -128, 128);
 		boolean dkMode = config.dkMode();
+		int height = clamp(calibratedHeight - clamp(globalYShift, -32, 32), -128, 128);
 		int scale = clamp(dkMode ? 200
 			: interactiveCalibration != null ? interactiveCalibration.getScale()
 			: useHelmetProfile ? helmetProfile.getModelScale() : config.prototype3dScale(), 25, 250);
@@ -783,7 +1383,8 @@ public class FaceSwapPlugin extends Plugin
 		int animationFrameOffset = clamp(interactiveCalibration != null ? interactiveCalibration.getAnimationFrameOffset()
 			: useHelmetProfile ? helmetProfile.getAnimationFrameOffset()
 			: config.prototypeAnimationFrameOffset(), -3, 3);
-		String modelKey = assignedHead.name() + ':' + height + ':' + scale + ':' + x + ':' + z + ':'
+		String modelKey = assignedHead.name() + ':' + assignment.getStyleId() + ':'
+			+ String.valueOf(assignment.getCustomImageId()) + ':' + height + ':' + scale + ':' + x + ':' + z + ':'
 			+ pitch + ':' + yaw + ':' + roll + ':' + widthScale + ':' + faceHeightScale + ':'
 			+ depthScale + ':' + backDepthScale + ':' + chinHeightScale + ':'
 			+ textureWidthScale + ':' + triangleCount.name() + meshCalibration.key();
@@ -797,7 +1398,7 @@ public class FaceSwapPlugin extends Plugin
 				model = createPrototype3dModel(height, scale, x, z, pitch, yaw, roll,
 					widthScale, faceHeightScale, depthScale, backDepthScale, chinHeightScale,
 					textureWidthScale,
-					triangleCount, assignedHead, meshCalibration);
+					triangleCount, assignedHead, assignment.getStyleId(), assignment.getCustomImageId(), meshCalibration);
 				if (model == null)
 				{
 					return;
@@ -882,21 +1483,37 @@ public class FaceSwapPlugin extends Plugin
 			playerHeadAssignments = null;
 			npcHeadAssignments = null;
 		}
+		else if (event.getKey().startsWith("defaultStyle_"))
+		{
+			playerHeadAssignments = null;
+			npcHeadAssignments = null;
+		}
 		else if (event.getKey().startsWith("targetNames_")
-			|| event.getKey().startsWith("targetStyles_"))
+			|| event.getKey().startsWith("targetStyles_")
+			|| event.getKey().startsWith("targetModes_")
+			|| event.getKey().startsWith("targetCustomImages_"))
 		{
 			playerHeadAssignments = null;
 		}
 		else if (event.getKey().startsWith("npcTargetNames_")
-			|| event.getKey().startsWith("npcTargetStyles_"))
+			|| event.getKey().startsWith("npcTargetStyles_")
+			|| event.getKey().startsWith("npcTargetModes_")
+			|| event.getKey().startsWith("npcTargetCustomImages_"))
 		{
 			npcHeadAssignments = null;
+		}
+		else if ("cycleCreatorStylesWhileMoving".equals(event.getKey()))
+		{
+			resetMovementStyleCycle();
 		}
 
 		if ("renderMode".equals(event.getKey())
 			|| TRIANGLE_OVERRIDES_KEY.equals(event.getKey())
 			|| "targetScope".equals(event.getKey())
-			|| "npcTargetScope".equals(event.getKey()))
+			|| "npcTargetScope".equals(event.getKey())
+			|| event.getKey().startsWith("defaultStyle_")
+			|| "headPickerLayout".equals(event.getKey())
+			|| "cycleCreatorStylesWhileMoving".equals(event.getKey()))
 		{
 			refreshPanel();
 		}
@@ -944,7 +1561,8 @@ public class FaceSwapPlugin extends Plugin
 		}
 
 		if ("renderMode".equals(event.getKey())
-			|| "selectedHead".equals(event.getKey()))
+			|| "selectedHead".equals(event.getKey())
+			|| event.getKey().startsWith("defaultStyle_"))
 		{
 			clientThread.invoke(this::removePrototype3dInstances);
 		}
@@ -1161,6 +1779,47 @@ public class FaceSwapPlugin extends Plugin
 		}
 	}
 
+	@Subscribe
+	public void onHitsplatApplied(HitsplatApplied event)
+	{
+		if (config == null || !cycleCreatorStylesWhileMoving()
+			|| client.getGameState() != GameState.LOGGED_IN)
+		{
+			return;
+		}
+
+		Player localPlayer = client.getLocalPlayer();
+		Hitsplat hitsplat = event.getHitsplat();
+		if (localPlayer == null || hitsplat == null || hitsplat.getAmount() <= 0)
+		{
+			return;
+		}
+
+		FaceSwapAssignment assignment = getAssignedAssignment(localPlayer);
+		if (assignment == null || !shouldCycleCreatorStyles(assignment.getHead()))
+		{
+			return;
+		}
+
+		if (event.getActor() == localPlayer)
+		{
+			localReactionStyleId = nextDamageTakenCrying ? "crying" : "sad";
+			nextDamageTakenCrying = !nextDamageTakenCrying;
+		}
+		else if (hitsplat.isMine())
+		{
+			localReactionStyleId = nextDamageDealtAngry ? "angry" : FaceSwapAssignment.DEFAULT_STYLE_ID;
+			nextDamageDealtAngry = !nextDamageDealtAngry;
+		}
+		else
+		{
+			return;
+		}
+
+		localReactionTicks = EXPRESSION_REACTION_HOLD_CLIENT_TICKS;
+		refreshPanel();
+	}
+
 	private static int findHelmetProfileRow(List<String> lines, int itemId)
 	{
 		String target = Integer.toString(itemId);
@@ -1321,7 +1980,8 @@ public class FaceSwapPlugin extends Plugin
 		Set<Actor> activeActors = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (Player player : client.getPlayers())
 		{
-			if (getAssignedHead(player) != null)
+			FaceSwapAssignment assignment = getAssignedAssignment(player);
+			if (assignment != null && getAssignmentRenderMode(assignment) == FaceSwapRenderMode.MASK)
 			{
 				updateMaskTrackingRig(player);
 				activeActors.add(player);
@@ -1329,8 +1989,10 @@ public class FaceSwapPlugin extends Plugin
 		}
 		for (NPC npc : client.getNpcs())
 		{
+			FaceSwapAssignment assignment = getAssignedAssignment(npc);
 			if (getMaskTrackingMode() == MaskTrackingMode.ANIMATED_RIG
-				&& getAssignedHead(npc) != null)
+				&& assignment != null
+				&& getAssignmentRenderMode(assignment) == FaceSwapRenderMode.MASK)
 			{
 				updateMaskTrackingRig(npc);
 				activeActors.add(npc);
@@ -1408,7 +2070,8 @@ public class FaceSwapPlugin extends Plugin
 	private Model createPrototype3dModel(int height, int scale, int x, int z, int pitch, int yaw, int roll,
 		int widthScale, int faceHeightScale, int depthScale, int backDepthScale, int chinHeightScale,
 		int textureWidthScale,
-		FaceSwapTriangleCount triangleCount, FaceSwapHead selectedHead, HelmetMeshCalibration meshCalibration)
+		FaceSwapTriangleCount triangleCount, FaceSwapHead selectedHead, String styleId, String customImageId,
+		HelmetMeshCalibration meshCalibration)
 	{
 		ModelData modelData = createDenseHeadModelData(triangleCount, meshCalibration);
 		if (modelData == null)
@@ -1442,10 +2105,14 @@ public class FaceSwapPlugin extends Plugin
 			maxZ = Math.max(maxZ, verticesZ[vertex]);
 		}
 
-		BufferedImage frontImage = FaceSwapHeadImages.get(selectedHead, FaceSwapHeadDirection.FRONT);
-		BufferedImage backImage = FaceSwapHeadImages.get(selectedHead, FaceSwapHeadDirection.BACK);
-		Color frontFallback = FaceSwapHeadImages.getAverageColor(selectedHead, FaceSwapHeadDirection.FRONT);
-		Color backFallback = FaceSwapHeadImages.getAverageColor(selectedHead, FaceSwapHeadDirection.BACK);
+		BufferedImage frontImage = getAssignmentImage(
+			selectedHead, styleId, customImageId, FaceSwapHeadDirection.FRONT);
+		BufferedImage backImage = getAssignmentImage(
+			selectedHead, styleId, customImageId, FaceSwapHeadDirection.BACK);
+		Color frontFallback = getAssignmentAverageColor(
+			selectedHead, styleId, customImageId, FaceSwapHeadDirection.FRONT);
+		Color backFallback = getAssignmentAverageColor(
+			selectedHead, styleId, customImageId, FaceSwapHeadDirection.BACK);
 		int[] faceA = modelData.getFaceIndices1();
 		int[] faceB = modelData.getFaceIndices2();
 		int[] faceC = modelData.getFaceIndices3();
@@ -2217,6 +2884,11 @@ public class FaceSwapPlugin extends Plugin
 		return clamp(config.maskWidth(), 50, 120);
 	}
 
+	boolean showMaskStrap()
+	{
+		return config.showMaskStrap();
+	}
+
 	int getHeightOffset()
 	{
 		return clamp(config.heightOffset(), 0, 300);
@@ -2501,6 +3173,14 @@ public class FaceSwapPlugin extends Plugin
 		{
 			configManager.setConfiguration(CONFIG_GROUP, selectedNpcKey, normalizeTargetNames(legacyNpcNames));
 		}
+
+		for (FaceSwapHead head : FaceSwapHead.values())
+		{
+			ensureTargetStyles(head, getConfiguredTargetNames(head), false);
+			ensureTargetStyles(head, getConfiguredNpcTargetNames(head), true);
+			ensureTargetModes(head, getConfiguredTargetNames(head), false);
+			ensureTargetModes(head, getConfiguredNpcTargetNames(head), true);
+		}
 	}
 
 	boolean shouldRenderOn(Player player)
@@ -2516,6 +3196,11 @@ public class FaceSwapPlugin extends Plugin
 
 	FaceSwapAssignment getAssignedAssignment(Player player)
 	{
+		return getLocalDynamicAssignment(player, getConfiguredAssignedAssignment(player));
+	}
+
+	private FaceSwapAssignment getConfiguredAssignedAssignment(Player player)
+	{
 		if (player == null)
 		{
 			return null;
@@ -2525,7 +3210,10 @@ public class FaceSwapPlugin extends Plugin
 		if (scope == FaceSwapTargetScope.SPECIFIC_PLAYERS)
 		{
 			String playerName = normalizePlayerName(player.getName());
-			return getPlayerHeadAssignments().get(playerName);
+			return usableAssignment(resolveSpecificPlayerAssignment(
+				player == client.getLocalPlayer(), pickPlayerMode,
+				getConfiguredSelectedAssignment(),
+				getPlayerHeadAssignments().get(playerName)));
 		}
 
 		Player localPlayer = client.getLocalPlayer();
@@ -2563,7 +3251,39 @@ public class FaceSwapPlugin extends Plugin
 				matches = false;
 				break;
 		}
-		return matches ? FaceSwapAssignment.defaultStyle(getEffectiveSelectedHead()) : null;
+		if (!matches)
+		{
+			return null;
+		}
+		FaceSwapAssignment assignment = getConfiguredSelectedAssignment();
+		return assignment;
+	}
+
+	private FaceSwapAssignment usableAssignment(FaceSwapAssignment assignment)
+	{
+		return assignment != null && (assignment.getHead() != FaceSwapHead.CUSTOM
+			|| customImageStore.getImage(assignment.getCustomImageId()) != null) ? assignment : null;
+	}
+
+	static FaceSwapAssignment resolveSpecificPlayerAssignment(
+		boolean localPlayer,
+		FaceSwapAssignment selectedAssignment,
+		FaceSwapAssignment targetAssignment)
+	{
+		return resolveSpecificPlayerAssignment(localPlayer, false, selectedAssignment, targetAssignment);
+	}
+
+	static FaceSwapAssignment resolveSpecificPlayerAssignment(
+		boolean localPlayer,
+		boolean pickPlayerMode,
+		FaceSwapAssignment selectedAssignment,
+		FaceSwapAssignment targetAssignment)
+	{
+		if (localPlayer && pickPlayerMode)
+		{
+			return targetAssignment;
+		}
+		return localPlayer ? targetAssignment == null ? null : selectedAssignment : targetAssignment;
 	}
 
 	FaceSwapHead getAssignedHead(NPC npc)
@@ -2574,17 +3294,22 @@ public class FaceSwapPlugin extends Plugin
 
 	FaceSwapAssignment getAssignedAssignment(NPC npc)
 	{
+		return getNpcMovementAssignment(npc, getConfiguredNpcAssignment(npc));
+	}
+
+	private FaceSwapAssignment getConfiguredNpcAssignment(NPC npc)
+	{
 		if (npc == null || npc.getName() == null)
 		{
 			return null;
 		}
-		switch (config.npcTargetScope())
+		 switch (config.npcTargetScope())
 		{
 			case ALL_NPCS:
-				return FaceSwapAssignment.defaultStyle(getEffectiveSelectedHead());
+				return getConfiguredSelectedAssignment();
 			case SPECIFIC_NPCS:
 				String npcName = normalizePlayerName(npc.getName());
-				return getNpcHeadAssignments().get(npcName);
+				return usableAssignment(getNpcHeadAssignments().get(npcName));
 			case DISABLED:
 			default:
 				return null;
@@ -2879,7 +3604,34 @@ public class FaceSwapPlugin extends Plugin
 		}
 		playerHeadAssignments = null;
 		npcHeadAssignments = null;
+		resetMovementStyleCycle();
 		configManager.setConfiguration(CONFIG_GROUP, "selectedHead", selectedHead);
+		refreshPanel();
+	}
+
+	void setSelectedStyle(FaceSwapHead head, String styleId)
+	{
+		if (head == null || !isHeadAvailable(head))
+		{
+			return;
+		}
+		String normalizedStyleId = FaceSwapAssignment.normalizeStyleId(styleId);
+		if (!FaceSwapHeadImages.isStyleAvailable(head, normalizedStyleId))
+		{
+			return;
+		}
+		playerHeadAssignments = null;
+		npcHeadAssignments = null;
+		resetMovementStyleCycle();
+		configManager.setConfiguration(CONFIG_GROUP, defaultStyleKey(head), normalizedStyleId);
+		configManager.setConfiguration(CONFIG_GROUP, "selectedHead", head);
+		refreshPanel();
+	}
+
+	void setCycleCreatorStylesWhileMoving(boolean enabled)
+	{
+		configManager.setConfiguration(CONFIG_GROUP, "cycleCreatorStylesWhileMoving", enabled);
+		resetMovementStyleCycle();
 		refreshPanel();
 	}
 
@@ -2901,6 +3653,21 @@ public class FaceSwapPlugin extends Plugin
 	BufferedImage getSelectedCustomImage()
 	{
 		return customImageStore.getSelectedImage();
+	}
+
+	BufferedImage getCustomBackImage(String id)
+	{
+		return customImageStore.getBackImage(id);
+	}
+
+	BufferedImage getSelectedCustomBackImage()
+	{
+		return customImageStore.getSelectedBackImage();
+	}
+
+	String getSelectedCustomImageId()
+	{
+		return customImageStore.getSelectedId();
 	}
 
 	void importCustomImage(java.nio.file.Path source, Consumer<String> callback)
@@ -2927,6 +3694,54 @@ public class FaceSwapPlugin extends Plugin
 		});
 	}
 
+	void importCustomBackImage(String id, java.nio.file.Path source, Consumer<String> callback)
+	{
+		customImageExecutor.submit(() ->
+		{
+			String status;
+			try
+			{
+				customImageStore.importBackImage(id, source);
+				configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.CUSTOM);
+				status = "Imported optional back image " + source.getFileName();
+			}
+			catch (IOException | RuntimeException ex)
+			{
+				status = "Could not import back image: " + ex.getMessage();
+			}
+			String result = status;
+			SwingUtilities.invokeLater(() ->
+			{
+				callback.accept(result);
+				refreshPanel();
+			});
+		});
+	}
+
+	void replaceCustomImage(String id, java.nio.file.Path source, Consumer<String> callback)
+	{
+		customImageExecutor.submit(() ->
+		{
+			String status;
+			try
+			{
+				customImageStore.replaceImage(id, source);
+				configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.CUSTOM);
+				status = "Replaced custom front image with " + source.getFileName();
+			}
+			catch (IOException | RuntimeException ex)
+			{
+				status = "Could not replace front image: " + ex.getMessage();
+			}
+			String result = status;
+			SwingUtilities.invokeLater(() ->
+			{
+				callback.accept(result);
+				refreshPanel();
+			});
+		});
+	}
+
 	void selectCustomImage(String id)
 	{
 		customImageExecutor.submit(() ->
@@ -2939,12 +3754,14 @@ public class FaceSwapPlugin extends Plugin
 		});
 	}
 
-	void clearCustomImages(Runnable callback)
+	void removeCustomImage(String id, Runnable callback)
 	{
 		customImageExecutor.submit(() ->
 		{
-			customImageStore.clear();
-			configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.SARDACO);
+			if (customImageStore.remove(id) && !customImageStore.hasSelectedImage())
+			{
+				configManager.setConfiguration(CONFIG_GROUP, "selectedHead", FaceSwapHead.SARDACO);
+			}
 			SwingUtilities.invokeLater(() ->
 			{
 				callback.run();
@@ -2959,10 +3776,10 @@ public class FaceSwapPlugin extends Plugin
 		{
 			return;
 		}
-		if (targetScope != FaceSwapTargetScope.SPECIFIC_PLAYERS
-			&& config.npcTargetScope() != FaceSwapNpcTargetScope.SPECIFIC_NPCS)
+		if (targetScope != FaceSwapTargetScope.SPECIFIC_PLAYERS)
 		{
 			pickPlayerMode = false;
+			hoveredPickActor = null;
 		}
 		configManager.setConfiguration(CONFIG_GROUP, "targetScope", targetScope);
 		refreshPanel();
@@ -3017,11 +3834,18 @@ public class FaceSwapPlugin extends Plugin
 					configManager.setConfiguration(CONFIG_GROUP, targetNamesKey(head),
 						String.join("\n", otherNames.values()));
 					removeTargetStyles(head, assignedNames, false);
+					removeTargetModes(head, assignedNames, false);
+					removeTargetCustomImages(head, assignedNames, false);
 				}
 			}
 		}
 		configManager.setConfiguration(CONFIG_GROUP, targetNamesKey(selectedHead), normalizedNames);
 		removeTargetStyles(selectedHead, removedNames, false);
+		removeTargetModes(selectedHead, removedNames, false);
+		removeTargetCustomImages(selectedHead, removedNames, false);
+		ensureTargetStyles(selectedHead, assignedNames, false);
+		ensureTargetModes(selectedHead, assignedNames, false);
+		ensureTargetCustomImages(selectedHead, assignedNames, false);
 		refreshPanel();
 	}
 
@@ -3034,6 +3858,8 @@ public class FaceSwapPlugin extends Plugin
 		LinkedHashMap<String, String> names = parseTargetNames(getTargetNames(head));
 		names.put(normalizePlayerName(playerName), playerName.replace('\u00A0', ' ').trim());
 		setTargetNames(String.join("\n", names.values()));
+		setTargetStyle(playerName, head, getDefaultStyleId(head), false);
+		setTargetMode(playerName, head, getRenderMode(), false);
 	}
 
 	void setNpcTargetNames(String targetNames)
@@ -3058,21 +3884,194 @@ public class FaceSwapPlugin extends Plugin
 					configManager.setConfiguration(CONFIG_GROUP, npcTargetNamesKey(head),
 						String.join("\n", otherNames.values()));
 					removeTargetStyles(head, assignedNames, true);
+					removeTargetModes(head, assignedNames, true);
+					removeTargetCustomImages(head, assignedNames, true);
 				}
 			}
 		}
 		configManager.setConfiguration(CONFIG_GROUP, npcTargetNamesKey(selectedHead), normalizedNames);
 		removeTargetStyles(selectedHead, removedNames, true);
+		removeTargetModes(selectedHead, removedNames, true);
+		removeTargetCustomImages(selectedHead, removedNames, true);
+		ensureTargetStyles(selectedHead, assignedNames, true);
+		ensureTargetModes(selectedHead, assignedNames, true);
+		ensureTargetCustomImages(selectedHead, assignedNames, true);
 		refreshPanel();
 	}
 
 	private void removeTargetStyles(FaceSwapHead head, Set<String> names, boolean npc)
 	{
+		if (head == null || names == null || names.isEmpty())
+		{
+			return;
+		}
 		String key = npc ? npcTargetStylesKey(head) : targetStylesKey(head);
 		Map<String, String> styles = parseTargetStyles(configManager.getConfiguration(CONFIG_GROUP, key));
 		if (styles.keySet().removeAll(names))
 		{
 			configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetStyles(styles));
+		}
+	}
+
+	private void ensureTargetStyles(FaceSwapHead head, Set<String> names, boolean npc)
+	{
+		if (head == null || names == null || names.isEmpty())
+		{
+			return;
+		}
+		String key = npc ? npcTargetStylesKey(head) : targetStylesKey(head);
+		Map<String, String> styles = parseTargetStyles(configManager.getConfiguration(CONFIG_GROUP, key));
+		String defaultStyleId = getDefaultStyleId(head);
+		boolean changed = false;
+		for (String name : names)
+		{
+			if (!styles.containsKey(name))
+			{
+				styles.put(name, defaultStyleId);
+				changed = true;
+			}
+		}
+		if (changed)
+		{
+			configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetStyles(styles));
+		}
+	}
+
+	private void removeTargetModes(FaceSwapHead head, Set<String> names, boolean npc)
+	{
+		if (head == null || names == null || names.isEmpty())
+		{
+			return;
+		}
+		String key = npc ? npcTargetModesKey(head) : targetModesKey(head);
+		Map<String, FaceSwapRenderMode> modes = parseTargetModes(configManager.getConfiguration(CONFIG_GROUP, key));
+		if (modes.keySet().removeAll(names))
+		{
+			configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetModes(modes));
+		}
+	}
+
+	private void ensureTargetModes(FaceSwapHead head, Set<String> names, boolean npc)
+	{
+		if (head == null || names == null || names.isEmpty())
+		{
+			return;
+		}
+		String key = npc ? npcTargetModesKey(head) : targetModesKey(head);
+		Map<String, FaceSwapRenderMode> modes = parseTargetModes(configManager.getConfiguration(CONFIG_GROUP, key));
+		boolean changed = false;
+		for (String name : names)
+		{
+			if (!modes.containsKey(name))
+			{
+				modes.put(name, getRenderMode());
+				changed = true;
+			}
+		}
+		if (changed)
+		{
+			configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetModes(modes));
+		}
+	}
+
+	private void removeTargetCustomImages(FaceSwapHead head, Set<String> names, boolean npc)
+	{
+		if (head != FaceSwapHead.CUSTOM || names == null || names.isEmpty())
+		{
+			return;
+		}
+		String key = npc ? npcTargetCustomImagesKey(head) : targetCustomImagesKey(head);
+		Map<String, String> images = parseTargetCustomImages(configManager.getConfiguration(CONFIG_GROUP, key));
+		if (images.keySet().removeAll(names))
+		{
+			configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetCustomImages(images));
+		}
+	}
+
+	private void ensureTargetCustomImages(FaceSwapHead head, Set<String> names, boolean npc)
+	{
+		if (head != FaceSwapHead.CUSTOM || names == null || names.isEmpty())
+		{
+			return;
+		}
+		String selectedId = customImageStore.getSelectedId();
+		if (selectedId == null)
+		{
+			return;
+		}
+		String key = npc ? npcTargetCustomImagesKey(head) : targetCustomImagesKey(head);
+		Map<String, String> images = parseTargetCustomImages(configManager.getConfiguration(CONFIG_GROUP, key));
+		boolean changed = false;
+		for (String name : names)
+		{
+			if (!images.containsKey(name))
+			{
+				images.put(name, selectedId);
+				changed = true;
+			}
+		}
+		if (changed)
+		{
+			configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetCustomImages(images));
+		}
+	}
+
+	private void setTargetStyle(String name, FaceSwapHead head, String styleId, boolean npc)
+	{
+		if (head == null)
+		{
+			return;
+		}
+		String normalizedName = normalizePlayerName(name);
+		Set<String> configuredNames = npc ? getConfiguredNpcTargetNames(head) : getConfiguredTargetNames(head);
+		if (!configuredNames.contains(normalizedName))
+		{
+			return;
+		}
+
+		String key = npc ? npcTargetStylesKey(head) : targetStylesKey(head);
+		Map<String, String> styles = parseTargetStyles(configManager.getConfiguration(CONFIG_GROUP, key));
+		String normalizedStyleId = FaceSwapAssignment.normalizeStyleId(styleId);
+		if (!FaceSwapHeadImages.isStyleAvailable(head, normalizedStyleId))
+		{
+			normalizedStyleId = FaceSwapAssignment.DEFAULT_STYLE_ID;
+		}
+		styles.put(normalizedName, normalizedStyleId);
+		configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetStyles(styles));
+		if (npc)
+		{
+			npcHeadAssignments = null;
+		}
+		else
+		{
+			playerHeadAssignments = null;
+		}
+	}
+
+	private void setTargetMode(String name, FaceSwapHead head, FaceSwapRenderMode renderMode, boolean npc)
+	{
+		if (head == null || renderMode == null)
+		{
+			return;
+		}
+		String normalizedName = normalizePlayerName(name);
+		Set<String> configuredNames = npc ? getConfiguredNpcTargetNames(head) : getConfiguredTargetNames(head);
+		if (!configuredNames.contains(normalizedName))
+		{
+			return;
+		}
+
+		String key = npc ? npcTargetModesKey(head) : targetModesKey(head);
+		Map<String, FaceSwapRenderMode> modes = parseTargetModes(configManager.getConfiguration(CONFIG_GROUP, key));
+		modes.put(normalizedName, renderMode);
+		configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetModes(modes));
+		if (npc)
+		{
+			npcHeadAssignments = null;
+		}
+		else
+		{
+			playerHeadAssignments = null;
 		}
 	}
 
@@ -3085,6 +4084,8 @@ public class FaceSwapPlugin extends Plugin
 		LinkedHashMap<String, String> names = parseTargetNames(getNpcTargetNames(head));
 		names.put(normalizePlayerName(npcName), npcName.replace('\u00A0', ' ').trim());
 		setNpcTargetNames(String.join("\n", names.values()));
+		setTargetStyle(npcName, head, getDefaultStyleId(head), true);
+		setTargetMode(npcName, head, getRenderMode(), true);
 	}
 
 	void setRenderMode(FaceSwapRenderMode renderMode)
@@ -3134,6 +4135,12 @@ public class FaceSwapPlugin extends Plugin
 	void setMaskWidth(int maskWidth)
 	{
 		configManager.setConfiguration(CONFIG_GROUP, "maskWidth", clamp(maskWidth, 50, 120));
+		refreshPanel();
+	}
+
+	void setShowMaskStrap(boolean show)
+	{
+		configManager.setConfiguration(CONFIG_GROUP, "showMaskStrap", show);
 		refreshPanel();
 	}
 
@@ -3301,6 +4308,9 @@ public class FaceSwapPlugin extends Plugin
 	{
 		return new FaceSwapPanelState(
 			getEffectiveSelectedHead(),
+			getEffectiveSelectedAssignment().getStyleId(),
+			getHeadPickerLayout(),
+			cycleCreatorStylesWhileMoving(),
 			config.targetScope(),
 			getPanelTargetNames(),
 			getTargetRadius(),
@@ -3310,6 +4320,7 @@ public class FaceSwapPlugin extends Plugin
 			getQualityLevel(),
 			config.dkMode(),
 			getMaskWidth(),
+			showMaskStrap(),
 			pickPlayerMode,
 			buildStatusText());
 	}
@@ -3322,9 +4333,13 @@ public class FaceSwapPlugin extends Plugin
 		String targetStatus;
 		if (pickPlayerMode)
 		{
+			FaceSwapHead selectedHead = getEffectiveSelectedHead();
+			String captureDescription = " using "
+				+ FaceSwapHeadImages.styleDisplayName(getDefaultStyleId(selectedHead))
+				+ " / " + getRenderMode();
 			targetStatus = hoveredPickActor == null
-				? "Hover and click an eligible player or NPC to add them to " + getEffectiveSelectedHead() + "."
-				: "Click " + hoveredPickActor.getName() + " to add them to " + getEffectiveSelectedHead() + ".";
+				? "Hover and click an eligible player or NPC to add them to " + selectedHead + captureDescription + "."
+				: "Click " + hoveredPickActor.getName() + " to add them to " + selectedHead + captureDescription + ".";
 			targetStatus += "\n\nPress ESC to exit target mode.";
 		}
 		else
@@ -3357,9 +4372,26 @@ public class FaceSwapPlugin extends Plugin
 
 	private FaceSwapAssignment createConfiguredAssignment(FaceSwapHead head, String name, boolean npc)
 	{
-		String styles = configManager.getConfiguration(CONFIG_GROUP,
-			npc ? npcTargetStylesKey(head) : targetStylesKey(head));
-		return new FaceSwapAssignment(head, parseTargetStyles(styles).get(name));
+		String styleKey = npc ? npcTargetStylesKey(head) : targetStylesKey(head);
+		String styleId = parseTargetStyles(configManager.getConfiguration(CONFIG_GROUP, styleKey)).get(name);
+		if (!FaceSwapHeadImages.isStyleAvailable(head, styleId))
+		{
+			styleId = getDefaultStyleId(head);
+		}
+
+		String modeKey = npc ? npcTargetModesKey(head) : targetModesKey(head);
+		FaceSwapRenderMode renderMode = parseTargetModes(
+			configManager.getConfiguration(CONFIG_GROUP, modeKey)).get(name);
+		String customImageId = head == FaceSwapHead.CUSTOM
+			? parseTargetCustomImages(configManager.getConfiguration(CONFIG_GROUP,
+				npc ? npcTargetCustomImagesKey(head) : targetCustomImagesKey(head))).get(name)
+			: null;
+		return new FaceSwapAssignment(head, styleId, renderMode, customImageId);
+	}
+
+	List<String> getConfiguredPlayerNames(FaceSwapHead head)
+	{
+		return new ArrayList<>(parseTargetNames(getTargetNames(head)).values());
 	}
 
 	private Map<String, FaceSwapAssignment> getPlayerHeadAssignments()
@@ -3418,51 +4450,6 @@ public class FaceSwapPlugin extends Plugin
 	private Set<String> getConfiguredNpcTargetNames(FaceSwapHead head)
 	{
 		return parseTargetNames(getNpcTargetNames(head)).keySet();
-	}
-
-	void setPlayerAssignmentStyle(String playerName, FaceSwapHead head, String styleId)
-	{
-		setAssignmentStyle(playerName, head, styleId, false);
-	}
-
-	void setNpcAssignmentStyle(String npcName, FaceSwapHead head, String styleId)
-	{
-		setAssignmentStyle(npcName, head, styleId, true);
-	}
-
-	private void setAssignmentStyle(String name, FaceSwapHead head, String styleId, boolean npc)
-	{
-		if (head == null)
-		{
-			return;
-		}
-		String normalizedName = normalizePlayerName(name);
-		Set<String> configuredNames = npc ? getConfiguredNpcTargetNames(head) : getConfiguredTargetNames(head);
-		if (!configuredNames.contains(normalizedName))
-		{
-			return;
-		}
-
-		String key = npc ? npcTargetStylesKey(head) : targetStylesKey(head);
-		Map<String, String> styles = parseTargetStyles(configManager.getConfiguration(CONFIG_GROUP, key));
-		String normalizedStyleId = FaceSwapAssignment.normalizeStyleId(styleId);
-		if (FaceSwapAssignment.DEFAULT_STYLE_ID.equals(normalizedStyleId))
-		{
-			styles.remove(normalizedName);
-		}
-		else
-		{
-			styles.put(normalizedName, normalizedStyleId);
-		}
-		configManager.setConfiguration(CONFIG_GROUP, key, serializeTargetStyles(styles));
-		if (npc)
-		{
-			npcHeadAssignments = null;
-		}
-		else
-		{
-			playerHeadAssignments = null;
-		}
 	}
 
 	private Map<String, FaceSwapAssignment> getNpcHeadAssignments()
@@ -3524,6 +4511,11 @@ public class FaceSwapPlugin extends Plugin
 		return "npcTargetNames_" + head.name().toLowerCase(Locale.ROOT);
 	}
 
+	static String defaultStyleKey(FaceSwapHead head)
+	{
+		return "defaultStyle_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
 	static String targetStylesKey(FaceSwapHead head)
 	{
 		return "targetStyles_" + head.name().toLowerCase(Locale.ROOT);
@@ -3532,6 +4524,26 @@ public class FaceSwapPlugin extends Plugin
 	static String npcTargetStylesKey(FaceSwapHead head)
 	{
 		return "npcTargetStyles_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
+	static String targetModesKey(FaceSwapHead head)
+	{
+		return "targetModes_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
+	static String npcTargetModesKey(FaceSwapHead head)
+	{
+		return "npcTargetModes_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
+	static String targetCustomImagesKey(FaceSwapHead head)
+	{
+		return "targetCustomImages_" + head.name().toLowerCase(Locale.ROOT);
+	}
+
+	static String npcTargetCustomImagesKey(FaceSwapHead head)
+	{
+		return "npcTargetCustomImages_" + head.name().toLowerCase(Locale.ROOT);
 	}
 
 	static Map<String, String> parseTargetStyles(String serializedStyles)
@@ -3548,7 +4560,7 @@ public class FaceSwapPlugin extends Plugin
 			{
 				String name = normalizePlayerName(fields[0]);
 				String styleId = FaceSwapAssignment.normalizeStyleId(fields[1]);
-				if (!name.isEmpty() && !FaceSwapAssignment.DEFAULT_STYLE_ID.equals(styleId))
+				if (!name.isEmpty())
 				{
 					styles.put(name, styleId);
 				}
@@ -3569,6 +4581,97 @@ public class FaceSwapPlugin extends Plugin
 				+ FaceSwapAssignment.normalizeStyleId(entry.getValue()))
 			.sorted()
 			.collect(Collectors.joining(","));
+	}
+
+	static Map<String, String> parseTargetCustomImages(String serializedImages)
+	{
+		Map<String, String> images = new HashMap<>();
+		if (serializedImages == null || serializedImages.isBlank())
+		{
+			return images;
+		}
+		for (String entry : serializedImages.split(","))
+		{
+			String[] fields = entry.split("=", 2);
+			if (fields.length != 2)
+			{
+				continue;
+			}
+			String name = normalizePlayerName(fields[0]);
+			String imageId = fields[1].trim();
+			if (!name.isEmpty() && !imageId.isEmpty())
+			{
+				images.put(name, imageId);
+			}
+		}
+		return images;
+	}
+
+	static String serializeTargetCustomImages(Map<String, String> images)
+	{
+		if (images == null || images.isEmpty())
+		{
+			return "";
+		}
+		return images.entrySet().stream()
+			.filter(entry -> !entry.getKey().isBlank()
+				&& entry.getValue() != null && !entry.getValue().isBlank())
+			.map(entry -> normalizePlayerName(entry.getKey()) + "=" + entry.getValue().trim())
+			.sorted()
+			.collect(Collectors.joining(","));
+	}
+
+	static Map<String, FaceSwapRenderMode> parseTargetModes(String serializedModes)
+	{
+		Map<String, FaceSwapRenderMode> modes = new HashMap<>();
+		if (serializedModes == null || serializedModes.isBlank())
+		{
+			return modes;
+		}
+		for (String entry : serializedModes.split(","))
+		{
+			String[] fields = entry.split("=", 2);
+			if (fields.length != 2)
+			{
+				continue;
+			}
+			String name = normalizePlayerName(fields[0]);
+			FaceSwapRenderMode renderMode = parseTargetRenderMode(fields[1]);
+			if (!name.isEmpty() && renderMode != null)
+			{
+				modes.put(name, renderMode);
+			}
+		}
+		return modes;
+	}
+
+	static String serializeTargetModes(Map<String, FaceSwapRenderMode> modes)
+	{
+		if (modes == null || modes.isEmpty())
+		{
+			return "";
+		}
+		return modes.entrySet().stream()
+			.filter(entry -> !entry.getKey().isBlank() && entry.getValue() != null)
+			.map(entry -> normalizePlayerName(entry.getKey()) + "=" + entry.getValue().name())
+			.sorted()
+			.collect(Collectors.joining(","));
+	}
+
+	private static FaceSwapRenderMode parseTargetRenderMode(String renderMode)
+	{
+		if (renderMode == null || renderMode.isBlank())
+		{
+			return null;
+		}
+		try
+		{
+			return FaceSwapRenderMode.valueOf(renderMode.trim().toUpperCase(Locale.ROOT));
+		}
+		catch (IllegalArgumentException ex)
+		{
+			return null;
+		}
 	}
 
 	private static String normalizePlayerName(String name)
@@ -3607,6 +4710,16 @@ public class FaceSwapPlugin extends Plugin
 		public void keyReleased(KeyEvent event)
 		{
 		}
+	}
+
+	private static final class MovementCycleState
+	{
+		private FaceSwapHead head;
+		private String styleId = FaceSwapAssignment.DEFAULT_STYLE_ID;
+		private int ticks;
+		private int lastX = Integer.MIN_VALUE;
+		private int lastY = Integer.MIN_VALUE;
+		private boolean moving;
 	}
 
 	private static final class Prototype3dInstance

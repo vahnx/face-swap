@@ -2,6 +2,8 @@
 
 These rules apply to every generated face/head asset for this plugin.
 
+For project-specific expression, transparency, archive, and compression decisions, also read [Face Asset Standards](asset-standards.md).
+
 ## Required Output
 
 - Final plugin assets must be transparent PNG files.
@@ -79,24 +81,34 @@ The normalizer uses high-quality Lanczos resampling, preserves alpha, centers th
 
 ### Plugin Hub Size Optimization
 
-When the packaged plugin approaches the Plugin Hub size limit, recompress all tracked PNGs with `pngquant`. This is a separate release-size pass from the lossless normalizer above: `pngquant` is lossy and can substantially reduce indexed-color PNG sizes.
+When the packaged plugin approaches the Plugin Hub size limit, recompress runtime PNGs with `pngquant`. This is a separate release-size pass from the lossless normalizer above: `pngquant` is lossy and can substantially reduce indexed-color PNG sizes.
+
+Use the creator tier for content-creator faces and the lower-priority tier only for emojis and fictional characters:
 
 From the repository root, run:
 
 ```powershell
-git ls-files '*.png' | ForEach-Object {
-    pngquant --quality 65-85 --speed 1 --skip-if-larger --force --ext .png -- $_
+Get-ChildItem src/main/resources/heads/content_creators,src/main/resources/heads/content_creators_3d -Recurse -Filter *.png | ForEach-Object {
+    pngquant --quality 0-50 --speed 1 --strip --skip-if-larger --force --ext .png -- $_.FullName
+}
+
+Get-ChildItem src/main/resources/heads/emojis,src/main/resources/heads/fictional_characters -Recurse -Filter *.png | ForEach-Object {
+    pngquant --quality 0-30 --speed 1 --strip --skip-if-larger --force --ext .png -- $_.FullName
 }
 ```
 
 The options mean:
 
-- `--quality 65-85`: bounded lossy quality range; inspect the result visually.
+- `--quality 0-50`: current creator compression tier; inspect the result visually.
+- `--quality 0-30`: more aggressive tier reserved for emojis and fictional characters.
 - `--speed 1`: prioritizes compression quality over processing speed.
+- `--strip`: removes nonessential metadata.
 - `--skip-if-larger`: keeps the original when the optimized file would be larger.
 - `--force --ext .png`: replaces each file while preserving its path and filename.
 
-This preserves dimensions, alpha transparency, and code references, but it may reduce color precision through indexed-color quantization. Afterward, run the asset tests and build, inspect representative front/back assets and screenshots, and check the final JAR size.
+This preserves dimensions, alpha transparency, and code references, but it may reduce color precision through indexed-color quantization. Afterward, run the asset tests and build, inspect representative front/back assets and screenshots, and check the final JAR size. See [Face Asset Standards](asset-standards.md) for the project’s visual acceptance rules and expression references.
+
+Do not accept a compressed expression variant if quantization creates transparent holes through the subject. Restore the higher-quality source, repair the exterior-only alpha mask, or keep that individual asset out of the lossy pass.
 
 Historical result from the first size reduction pass:
 

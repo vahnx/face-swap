@@ -27,6 +27,7 @@ final class FaceSwapCustomImageStore
 	private final Path metadataFile;
 	private final List<Entry> recents = new ArrayList<>();
 	private final Map<String, BufferedImage> images = new ConcurrentHashMap<>();
+	private final Map<String, BufferedImage> backImages = new ConcurrentHashMap<>();
 	private volatile String selectedId;
 
 	FaceSwapCustomImageStore()
@@ -66,11 +67,17 @@ final class FaceSwapCustomImageStore
 				String name = properties.getProperty("entry." + index + ".name");
 				if (id != null && name != null && Files.isRegularFile(imagePath(id)))
 				{
-					recents.add(new Entry(id, name));
 					BufferedImage image = ImageIO.read(imagePath(id).toFile());
 					if (image != null)
 					{
 						images.put(id, image);
+						BufferedImage backImage = Files.isRegularFile(backImagePath(id))
+							? ImageIO.read(backImagePath(id).toFile()) : null;
+						if (backImage != null)
+						{
+							backImages.put(id, backImage);
+						}
+						recents.add(new Entry(id, name, backImage != null));
 					}
 				}
 			}
@@ -111,8 +118,80 @@ final class FaceSwapCustomImageStore
 		images.put(id, normalized);
 		trimRecents();
 		persist();
-		FaceSwapHeadImages.setCustomImage(normalized);
+		applySelectedImages();
 		return entry;
+	}
+
+	void importBackImage(String id, Path source) throws IOException
+	{
+		if (id == null || !images.containsKey(id) || !Files.isRegularFile(imagePath(id)))
+		{
+			throw new IOException("Select a custom front image first");
+		}
+		if (source == null)
+		{
+			throw new IOException("No image was selected");
+		}
+
+		BufferedImage decoded = ImageIO.read(source.toFile());
+		if (decoded == null)
+		{
+			throw new IOException("Unsupported image format");
+		}
+
+		BufferedImage normalized = normalize(decoded);
+		ImageIO.write(normalized, "png", backImagePath(id).toFile());
+		backImages.put(id, normalized);
+		for (int index = 0; index < recents.size(); index++)
+		{
+			Entry entry = recents.get(index);
+			if (entry.id.equals(id))
+			{
+				recents.set(index, new Entry(entry.id, entry.name, true));
+				break;
+			}
+		}
+		selectedId = id;
+		persist();
+		applySelectedImages();
+	}
+
+	void replaceImage(String id, Path source) throws IOException
+	{
+		if (id == null || !images.containsKey(id) || !Files.isRegularFile(imagePath(id)))
+		{
+			throw new IOException("Select a custom image pair first");
+		}
+		if (source == null)
+		{
+			throw new IOException("No image was selected");
+		}
+
+		BufferedImage decoded = ImageIO.read(source.toFile());
+		if (decoded == null)
+		{
+			throw new IOException("Unsupported image format");
+		}
+
+		BufferedImage normalized = normalize(decoded);
+		ImageIO.write(normalized, "png", imagePath(id).toFile());
+		images.put(id, normalized);
+		selectedId = id;
+		for (int index = 0; index < recents.size(); index++)
+		{
+			Entry entry = recents.get(index);
+			if (entry.id.equals(id))
+			{
+				recents.set(index, new Entry(id, source.getFileName().toString(), entry.hasBack));
+				if (index > 0)
+				{
+					recents.add(0, recents.remove(index));
+				}
+				break;
+			}
+		}
+		persist();
+		applySelectedImages();
 	}
 
 	boolean select(String id)
@@ -126,7 +205,7 @@ final class FaceSwapCustomImageStore
 			return false;
 		}
 		selectedId = id;
-		FaceSwapHeadImages.setCustomImage(images.get(id));
+		applySelectedImages();
 		try
 		{
 			persist();
@@ -145,12 +224,27 @@ final class FaceSwapCustomImageStore
 
 	BufferedImage getImage(String id)
 	{
-		return images.get(id);
+		return id == null ? null : images.get(id);
 	}
 
 	BufferedImage getSelectedImage()
 	{
 		return selectedId == null ? null : images.get(selectedId);
+	}
+
+	BufferedImage getBackImage(String id)
+	{
+		return id == null ? null : backImages.get(id);
+	}
+
+	BufferedImage getSelectedBackImage()
+	{
+		return selectedId == null ? null : backImages.get(selectedId);
+	}
+
+	String getSelectedId()
+	{
+		return selectedId;
 	}
 
 	boolean hasSelectedImage()
@@ -165,6 +259,7 @@ final class FaceSwapCustomImageStore
 			try
 			{
 				Files.deleteIfExists(imagePath(entry.id));
+				Files.deleteIfExists(backImagePath(entry.id));
 			}
 			catch (IOException ignored)
 			{
@@ -173,8 +268,9 @@ final class FaceSwapCustomImageStore
 		}
 		recents.clear();
 		images.clear();
+		backImages.clear();
 		selectedId = null;
-		FaceSwapHeadImages.setCustomImage(null);
+		FaceSwapHeadImages.setCustomImages(null, null);
 		try
 		{
 			persist();
@@ -183,6 +279,55 @@ final class FaceSwapCustomImageStore
 		{
 			// The in-memory history has still been cleared.
 		}
+	}
+
+	boolean remove(String id)
+	{
+		if (id == null)
+		{
+			return false;
+		}
+
+		Entry removed = null;
+		for (Entry entry : recents)
+		{
+			if (entry.id.equals(id))
+			{
+				removed = entry;
+				break;
+			}
+		}
+		if (removed == null)
+		{
+			return false;
+		}
+
+		try
+		{
+			Files.deleteIfExists(imagePath(id));
+			Files.deleteIfExists(backImagePath(id));
+		}
+		catch (IOException ignored)
+		{
+			// Keep the in-memory history usable even if a stale cache file cannot be deleted.
+		}
+		recents.remove(removed);
+		images.remove(id);
+		backImages.remove(id);
+		if (id.equals(selectedId))
+		{
+			selectedId = null;
+			FaceSwapHeadImages.setCustomImages(null, null);
+		}
+		try
+		{
+			persist();
+		}
+		catch (IOException ignored)
+		{
+			// The in-memory history has still been updated.
+		}
+		return true;
 	}
 
 	static BufferedImage normalize(BufferedImage source)
@@ -207,7 +352,14 @@ final class FaceSwapCustomImageStore
 
 	private void loadSelected()
 	{
-		FaceSwapHeadImages.setCustomImage(images.get(selectedId));
+		applySelectedImages();
+	}
+
+	private void applySelectedImages()
+	{
+		FaceSwapHeadImages.setCustomImages(
+			selectedId == null ? null : images.get(selectedId),
+			selectedId == null ? null : backImages.get(selectedId));
 	}
 
 	private void trimRecents()
@@ -218,6 +370,7 @@ final class FaceSwapCustomImageStore
 			try
 			{
 				Files.deleteIfExists(imagePath(removed.id));
+				Files.deleteIfExists(backImagePath(removed.id));
 			}
 			catch (IOException ignored)
 			{
@@ -253,15 +406,27 @@ final class FaceSwapCustomImageStore
 		return directory.resolve(id + ".png");
 	}
 
+	private Path backImagePath(String id)
+	{
+		return directory.resolve(id + "_back.png");
+	}
+
 	static final class Entry
 	{
 		final String id;
 		final String name;
+		final boolean hasBack;
 
 		Entry(String id, String name)
 		{
+			this(id, name, false);
+		}
+
+		Entry(String id, String name, boolean hasBack)
+		{
 			this.id = id;
 			this.name = name;
+			this.hasBack = hasBack;
 		}
 	}
 }

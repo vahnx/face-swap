@@ -4,6 +4,7 @@
 import argparse
 import os
 import shutil
+from collections import deque
 from pathlib import Path
 
 from PIL import Image
@@ -12,6 +13,48 @@ from PIL import Image
 DEFAULT_SIZE = 512
 DEFAULT_PADDING = 16
 ALPHA_BOUNDS_THRESHOLD = 8
+RUNTIME_ALPHA_THRESHOLD = 24
+
+
+def make_runtime_alpha_binary(image: Image.Image) -> None:
+    """Remove resampling halos and enclosed transparency from the output."""
+    width, height = image.size
+    alpha = image.getchannel("A")
+    transparent = [
+        alpha.getpixel((x, y)) <= RUNTIME_ALPHA_THRESHOLD
+        for y in range(height)
+        for x in range(width)
+    ]
+    outside = [False] * (width * height)
+    queue = deque()
+
+    for y in range(height):
+        for x in range(width):
+            index = y * width + x
+            if transparent[index] and (x == 0 or y == 0 or x == width - 1 or y == height - 1):
+                outside[index] = True
+                queue.append(index)
+
+    while queue:
+        index = queue.popleft()
+        x = index % width
+        y = index // width
+        for neighbor in (
+            index - 1 if x > 0 else -1,
+            index + 1 if x + 1 < width else -1,
+            index - width if y > 0 else -1,
+            index + width if y + 1 < height else -1,
+        ):
+            if neighbor >= 0 and transparent[neighbor] and not outside[neighbor]:
+                outside[neighbor] = True
+                queue.append(neighbor)
+
+    pixels = image.load()
+    for index, is_transparent in enumerate(transparent):
+        x = index % width
+        y = index // width
+        red, green, blue, _ = pixels[x, y]
+        pixels[x, y] = (red, green, blue, 0 if is_transparent and outside[index] else 255)
 
 
 def normalize_asset(source_path: Path, size: int, padding: int, backup_dir: Path | None) -> None:
@@ -43,8 +86,9 @@ def normalize_asset(source_path: Path, size: int, padding: int, backup_dir: Path
     output.paste(
         resized,
         ((size - output_width) // 2, (size - output_height) // 2),
-        resized,
+        resized.getchannel("A"),
     )
+    make_runtime_alpha_binary(output)
 
     temporary_path = source_path.with_suffix(".normalized.png")
     output.save(temporary_path, format="PNG", optimize=True, compress_level=9)

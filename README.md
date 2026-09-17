@@ -40,10 +40,6 @@ Current release creators:
 
 ..and more to come upon request and approval
 
-Framed, Soup, and Hani use Standard and OSRS/block front/back portraits in the
-existing rendering modes. Each also includes a compressed Sad expression variant;
-existing creator reactions remain available.
-
 ## Screenshots
 
 Swag-up your favorite creators with your BiS fashon-scape!

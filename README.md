@@ -12,7 +12,7 @@ Swap faces onto OSRS player or NPC models.
 ## Creators
 Current release creators:
 
-- **Odablock:** [Kick](https://kick.com/odablock) | [YouTube](https://www.youtube.com/@odablock) | [Twitch](https://www.twitch.tv/odablock) | [X](https://x.com/odablock)
+- **Odablock:** [Kick](https://kick.com/odablock) | [YouTube](https://www.youtube.com/@odablock) | [Twitch](https://www.twitch.tv/odablock) | [X](https://x.com/odablock) | [Instagram](https://www.instagram.com/odablock/)
 - **Sardaco:** [Kick](https://kick.com/sardaco) | [YouTube](https://www.youtube.com/@SardacoTV) | [Twitch](https://www.twitch.tv/sardaco) | [X](https://x.com/Sardaco)
 - **Skill Specs:** [Kick](https://kick.com/skillspecs) | [YouTube](https://www.youtube.com/@skillspecs) | [Twitch](https://www.twitch.tv/skillspecs) | [X](https://x.com/skill_specs)
 - **TastyLife:** [Kick](https://kick.com/tastylife) | [YouTube](https://www.youtube.com/@TastyLifeRS) | [Twitch](https://www.twitch.tv/tastylife) | [X](https://x.com/TastyOSRS)
